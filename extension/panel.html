@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <div class="head">
+    <b>Travian Bot</b>
+    <span class="run" id="run">…</span>
+  </div>
+
+  <div class="alarma" id="alarma"></div>
+
+  <div class="acciones">
+    <button class="big" id="toggle">…</button>
+    <div class="origen" id="origen"></div>
+    <div class="modo">MODO
+      <select data-cfg="modo" id="modo">
+        <option value="tropas">TROPAS</option>
+        <option value="farm">FARM</option>
+        <option value="construccion">CONSTRUCCIÓN</option>
+        <option value="todo">TODO a la vez</option>
+      </select>
+      <small>el modo elegido usa las pestañas; farm list y héroe siguen de fondo si están tildados</small>
+    </div>
+    <label class="chk"><input type="checkbox" data-cfg="cerrarAlParar"> cerrar las pestañas al parar</label>
+  </div>
+
+  <div id="cards"></div>
+
+  <div class="pie">
+    <button class="mini" id="diag">copiar diagnóstico</button>
+    <button class="mini" id="limpiarlog">limpiar log</button>
+  </div>
+
+  <div class="logwrap"><div id="log"></div></div>
+
+  <script src="panel.js"></script>
+</body>
+</html>

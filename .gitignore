@@ -1,0 +1,12 @@
+# copias viejas y herramientas de esta PC (rutas del perfil de Chrome, id de la extensión)
+respaldo_*/
+herramientas/
+viejo/
+# empaquetados locales
+*.zip
+*.crx
+*.pem
+__pycache__/
+node_modules/
+.DS_Store
+Thumbs.db
