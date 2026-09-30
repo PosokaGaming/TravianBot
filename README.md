@@ -35,7 +35,7 @@ Para actualizar la extensión: reemplazá el contenido de la carpeta por el del
 zip nuevo y tocá ↻ en su tarjeta de `chrome://extensions` (la configuración y
 la lista se conservan).
 
-La primera vez el bot arranca **detenido**, en MODO TROPAS y con el NPC con
+La primera vez el bot arranca **detenido** y con el NPC con
 oro **apagado**: nada gasta oro hasta que lo tildes vos.
 
 ### Actualizaciones automáticas

@@ -185,6 +185,7 @@ worker guarda todo en memoria (no lee el disco en cada consulta).
 - TO DO LIST: reconoce aldeas con **espacios** en el nombre ("Nueva aldea",
   "Capua 02") y con letras que no son latinas; separalas con coma.
 - El rescate de cereal no hace NPC si el NPC está destildado.
+- v5.4.1: `small parties` / `fiestas chicas` antes o después ("small parties" se tomaba como tropas).
 
 ## v4 (27/09/2026) — MODOS y rondas por edificio
 - **MODO** (arriba en el panel): TROPAS · FARM · CONSTRUCCIÓN · TODO. El modo

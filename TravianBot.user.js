@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TravianBot
 // @namespace    https://github.com/PosokaGaming/TravianBot
-// @version      5.4.0
+// @version      5.4.1
 // @description  Bot para Travian Legends: TO DO LIST por aldea, farm list, tropas por prioridad de cola, héroe y construcción, con modos. Una sola pestaña.
 // @author       TravianBot
 // @match        *://*.travian.com/*
@@ -168,7 +168,8 @@ var TB_LISTA = (function () {
   const PAL_TROPAS = /^(tropas?|troops?|train|training|entrenar|queue|encolar|cola|hacer|make)\s+/;
   const PAL_RELLENO = /^(subir|upgrade|finish|terminar|terminar de subir|build|construir|mejorar)\s+/;
   const RX_NIVEL = /^(.*?)\s*(?:\b(?:a|al|hasta|to|nv|nivel|lvl|level|lv)\b\s*)?(\d{1,2})$/;
-  const RX_FIESTA = /^(fiestas?|parties|party|celebraciones?|celebrations?|keep parties going)\b(.*)$/;
+  // "fiestas chicas", "small parties", "parties small": el tamaño puede ir antes o después
+  const RX_FIESTA = /^((?:chicas?|pequenas?|small|little)\s+)?(fiestas?|parties|party|celebraciones?|celebrations?|keep parties going)\b(.*)$/;
   const RX_HOSP = /^(curar( el)? hospital|clear hospital|vaciar( el)? hospital|curar heridos|curar|heal|hospital)$/;
 
   /* PRIORIDAD (pedido del 30/09: "prioridad en 01 plaza de torneos hasta 10"):
@@ -192,7 +193,7 @@ var TB_LISTA = (function () {
   function ordenSuelta(t, texto) {
     if (!t) return null;
     const f = t.match(RX_FIESTA);
-    if (f) return { tipo: 'fiestas', grande: !/\b(chicas?|pequenas?|small)\b/.test(f[2]), txt: texto.trim() };
+    if (f) return { tipo: 'fiestas', grande: !f[1] && !/\b(chicas?|pequenas?|small|little)\b/.test(f[3]), txt: texto.trim() };
     if (RX_HOSP.test(t)) return { tipo: 'hospital', txt: texto.trim() };
     if (/^nada$|^nothing$/.test(t)) return { tipo: 'nada', txt: texto.trim() };
 
