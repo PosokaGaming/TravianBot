@@ -10,3 +10,10 @@ __pycache__/
 node_modules/
 .DS_Store
 Thumbs.db
+# la lista de cada jugador (nombres de aldeas): no va al repo
+extension/todo.txt
+extension/ajustes.json
+# paquetes para compartir (tools/empaquetar.py)
+dist/
+# script aparte de TRAVCO (vacas): no es parte del bot
+vacas/

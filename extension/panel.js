@@ -3,8 +3,8 @@
  *  órdenes. Por eso se puede cerrar y abrir sin afectar al bot.
  */
 
-const ROLES  = ['tropas', 'heroe', 'farm', 'recursos'];
-const NOMBRE = { tropas: 'Tropas', heroe: 'Héroe', farm: 'Farm list', recursos: 'Construcción' };
+const ROLES  = ['lista', 'tropas', 'heroe', 'farm', 'recursos'];   // orden de las tarjetas
+const NOMBRE = { tropas: 'Tropas', heroe: 'Héroe', farm: 'Farm list', recursos: 'Construcción', lista: 'TO DO LIST' };
 const MILITARES = [19, 20, 21, 29, 30];
 const GIDS   = { 19: 'Cuartel', 20: 'Establo', 21: 'Taller', 29: 'Gran cuartel', 30: 'Gran establo' };
 const GIDS_TODOS = {
@@ -12,8 +12,8 @@ const GIDS_TODOS = {
   10: 'Almacén', 11: 'Granero', 13: 'Herrería', 14: 'Plaza de torneos', 15: 'Edificio principal',
   16: 'Punto de reunión', 17: 'Mercado', 18: 'Embajada', 19: 'Cuartel', 20: 'Establo', 21: 'Taller',
   22: 'Academia', 23: 'Escondite', 24: 'Ayuntamiento', 25: 'Residencia', 26: 'Palacio', 27: 'Tesorería',
-  28: 'Oficina de comercio', 29: 'Gran cuartel', 30: 'Gran establo', 31: 'Muralla', 32: 'Empalizada',
-  33: 'Terraplén', 34: 'Cantero', 35: 'Cervecería', 36: 'Trampero', 37: 'Mansión del héroe',
+  28: 'Oficina de comercio', 29: 'Gran cuartel', 30: 'Gran establo', 31: 'Muralla', 32: 'Terraplén',
+  33: 'Empalizada', 34: 'Cantero', 35: 'Cervecería', 36: 'Trampero', 37: 'Mansión del héroe',
   38: 'Gran almacén', 39: 'Gran granero', 41: 'Abrevadero', 42: 'Muro de piedra', 44: 'Centro de mando',
   45: 'Acueducto', 46: 'Hospital',
 };
@@ -223,12 +223,48 @@ function cuerpoConstruccion(cfg, aldeas, edificios, herreria) {
   return h + `</div>`;
 }
 
+/* ═══════════ TO DO LIST ═══════════ */
+
+function cuerpoLista(cfg, aldeas) {
+  const c = cfg.lista || {};
+  const cada = c.cada || [60, 90];
+  const P = TB_LISTA.parsear(c.texto || '', aldeas || []);
+  const conOrdenes = (aldeas || []).filter(a => P.porAldea[a.did]);
+  let h =
+    `<div class="hint">Una línea por aldea: <b>ALDEA: orden, orden…</b> Cada aldea hace <b>sólo</b> lo de la lista; la farm list sale igual. Se usa con el MODO <b>TO DO LIST</b>.</div>` +
+    `<textarea id="listatexto" rows="12" spellcheck="false" placeholder="04T: Warehouse 20, Tournament Square 17, hospital, tropas Clubswinger + Teutonic Knight">${esc(c.texto || '')}</textarea>` +
+    `<div class="fila"><button class="mini" id="listaguardar">guardar lista</button><span class="hint">(o Ctrl+Enter)</span></div>` +
+    `<details><summary class="hint">órdenes que entiende</summary><div class="hint ayuda">` +
+      `<b>campos 10</b> · campos hasta nv10 (sin número: hasta el máximo) · <b>madera / barro / hierro / cereal 10</b><br>` +
+      `<b>Warehouse 20</b> · <b>Almacén 20</b> · un edificio (todas sus copias) hasta ese nivel<br>` +
+      `<b>tropas Mercenary + Marksman</b> · entrenar sin parar · <b>Marauder/Steppe Rider</b> = la primera que esté investigada<br>` +
+      `<b>hospital</b> · curar a los heridos · <b>fiestas</b> · grande si se puede, si no chica · <b>fiestas chicas</b><br>` +
+      `<b>todas:</b> para todas las aldeas · <b>nada</b> · esa aldea quieta · <b>#</b> comentario` +
+    `</div></details>` +
+    `<label>caballos primero: el establo recibe los recursos hasta <input type="number" min="1" max="24" data-cfg="lista.caballosHoras" value="${c.caballosHoras || 2}" style="width:44px"> h de cola</label>` +
+    `<label class="chk"><input type="checkbox" data-cfg="lista.heroe"${c.heroe !== false ? ' checked' : ''}> completar el establo con los recursos del héroe</label>` +
+    `<label class="chk"><input type="checkbox" data-cfg="lista.npc"${c.npc !== false ? ' checked' : ''}> NPC con oro (3 oro) si con eso entra ≥1 h de tropas, una obra que tardaría ≥1 h, o para el rescate de cereal</label>` +
+    `<label>máximo <input type="number" min="0" data-cfg="lista.npcMaxDia" value="${c.npcMaxDia == null ? 30 : c.npcMaxDia}" style="width:48px"> NPC por día` +
+      `<span class="hint">hoy: ${(ESTADO.npc && ESTADO.npc.dia === new Date().toLocaleDateString('sv')) ? ESTADO.npc.n + (ESTADO.npc.sinOro ? ' · sin oro' : '') : 0}</span></label>` +
+    `<label>revisar cada <input type="number" min="20" data-cfg="lista.cada.0" value="${cada[0]}" style="width:48px"> a ` +
+    `<input type="number" min="20" data-cfg="lista.cada.1" value="${cada[1]}" style="width:48px"> s</label>`;
+  h += `<div class="aldea">` +
+    (conOrdenes.length
+      ? conOrdenes.map(a => `<div class="lrow"><b>${esc(a.nombre)}</b> <span class="lord">${esc(P.porAldea[a.did].ordenes.map(TB_LISTA.describir).join(' · ') || 'nada')}</span>` +
+                             `<div class="lest" data-lest="${a.did}"></div></div>`).join('')
+      : `<div class="hint">la lista está vacía</div>`) +
+    P.errores.map(e => `<div class="lerr">⚠ línea ${e.linea}: ${esc(e.msg)}</div>`).join('') +
+    `</div>`;
+  return h;
+}
+
 /* ═══════════ el resto de las tarjetas ═══════════ */
 
 function cuerpoRol(rol, cfg, aldeas, unidades, scan, edificios, herreria) {
   const c = cfg[rol];
   if (rol === 'tropas')   return cuerpoTropas(cfg, aldeas, unidades, scan);
   if (rol === 'recursos') return cuerpoConstruccion(cfg, aldeas, edificios, herreria);
+  if (rol === 'lista')    return cuerpoLista(cfg, aldeas);
 
   const intervalo = `<label>cada <input type="number" min="5" data-cfg="${rol}.cadaSeg" value="${c.cadaSeg}" style="width:56px"> segundos (fijo)</label>`;
 
@@ -301,6 +337,13 @@ function pintarEstado() {
     dot.title = e.viva ? 'pestaña abierta' : 'pestaña cerrada';
   });
   tictac();
+  // qué está haciendo cada aldea de la lista (lo informa cada vuelta)
+  const le = ESTADO.listaEstado || {};
+  document.querySelectorAll('[data-lest]').forEach(el => {
+    const e = le[el.dataset.lest];
+    const nuevo = e ? hhmm(e.t) + ' · ' + e.txt : '';
+    if (el.textContent !== nuevo) el.textContent = nuevo;
+  });
   document.getElementById('log').innerHTML = log.slice(-40).reverse()
     .map(x => `<div><span>${hhmm(x.t)}</span> <em>${esc(x.r)}</em> ${esc(x.m)}</div>`).join('');
 }
@@ -337,6 +380,20 @@ function enganchar() {
   };
   const fa = document.getElementById('faldea');
   if (fa) fa.onchange = async () => { const cfg = ESTADO.cfg; cfg.farm.did = (fa.value === 'ACTIVA') ? '' : fa.value; await guardar(cfg); };
+
+  const lt = document.getElementById('listatexto');
+  const lg = document.getElementById('listaguardar');
+  const guardarLista = async () => {
+    const cfg = ESTADO.cfg;
+    cfg.lista = Object.assign({}, cfg.lista || {}, { texto: lt.value });
+    await guardar(cfg);
+    lt.blur();
+    refrescar(true);
+  };
+  if (lg && lt) {
+    lg.onclick = guardarLista;
+    lt.onkeydown = e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); guardarLista(); } };
+  }
 
   const esc_ = document.getElementById('escanear');
   if (esc_) esc_.onclick = async () => { esc_.disabled = true; await bg({ tipo: 'escanear', origen: await origenActivo() }); refrescar(true); };
@@ -487,7 +544,7 @@ async function refrescar(forzar) {
   if (!st || !st.cfg) return;
   ESTADO = st;
   const foco = document.activeElement;
-  const escribiendo = foco && /INPUT|SELECT/.test(foco.tagName);
+  const escribiendo = foco && /INPUT|SELECT|TEXTAREA/.test(foco.tagName);
   const firma = JSON.stringify([st.cfg, st.unidades, st.aldeas, st.scan, st.edificios, st.herreria]);
   if (forzar || (!escribiendo && firma !== firmaEstructura)) { firmaEstructura = firma; estructura(); }
   pintarEstado();

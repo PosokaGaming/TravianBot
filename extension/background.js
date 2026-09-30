@@ -8,8 +8,10 @@
  *  todo vive en chrome.storage.local.
  */
 
-const ROLES  = ['tropas', 'heroe', 'farm', 'recursos'];
-const NOMBRE = { tropas: 'Tropas', heroe: 'Héroe', farm: 'Farm list', recursos: 'Construcción' };
+importScripts('lista.js');   // TB_LISTA: lee el TO DO LIST
+
+const ROLES  = ['tropas', 'heroe', 'farm', 'recursos', 'lista'];
+const NOMBRE = { tropas: 'Tropas', heroe: 'Héroe', farm: 'Farm list', recursos: 'Construcción', lista: 'TO DO' };
 
 const CFG_DEF = {
   // plan = { '<did>': { '<gid>': { cada:[min,max] seg, u:[{t,min,max,usarMax}] } } }
@@ -19,7 +21,10 @@ const CFG_DEF = {
   // aldeas = { '<did>': { campos:{on,nivelMax,tipos}, edificios:[{gid,nivelMax}],
   //            herreria:[{u,nivelMax}], npc:{on,umbral}, oro:{terminar} } }
   recursos: { on: true, cada: [180, 300], unaPorVuelta: true, aldeas: {} },
-  modo: 'tropas',   // 'tropas' | 'farm' | 'construccion' | 'todo' — el modo elegido usa las pestañas; farm y héroe siguen de fondo
+  // TO DO LIST (29/09): texto por aldea (lista.js). archivo = último todo.txt importado.
+  // npc = gasta oro: apagado para quien recién instala (mi cuenta lo tiene prendido guardado)
+  lista   : { on: true, texto: '', archivo: '', cada: [60, 90], caballosHoras: 2, heroe: true, npc: false, npcMaxDia: 30 },
+  modo: 'tropas',   // 'lista' | 'tropas' | 'farm' | 'construccion' | 'todo' — el modo elegido usa las pestañas; farm y héroe siguen de fondo
   cerrarAlParar: true,
   debug: false,
 };
@@ -29,6 +34,7 @@ const RUTA = {
   heroe   : '/hero/attributes',
   farm    : '/build.php?gid=16&tt=99',
   recursos: '/dorf1.php',
+  lista   : '/profile',   // trabaja por fetch: la pestaña sólo espera
 };
 
 /* ───────────── fila ─────────────
@@ -153,6 +159,8 @@ async function cerrarPestana(rol) {
 
 async function arrancar(origen) {
   if (origen) await set('tb_origen', origen);
+  await importarAjustes();
+  await importarArchivoLista();
   const cfg = await leerCfg();
   await set('tb_alarma', null);
   await set('tb_lock', null);
@@ -199,12 +207,36 @@ async function parar(motivo) {
    farm list y el héroe siguen de fondo (si están encendidos en el panel); lo
    demás queda pausado y su pestaña se cierra para no gastar CPU. 'todo' =
    como antes, todo a la vez. */
-const MODO_ROL = { tropas: 'tropas', farm: 'farm', construccion: 'recursos' };
+const MODO_ROL = { tropas: 'tropas', farm: 'farm', construccion: 'recursos', lista: 'lista' };
 function rolActivo(cfg, r) {
   if (!cfg[r] || !cfg[r].on) return false;
   const modo = cfg.modo || 'todo';
-  if (modo === 'todo' || r === 'heroe' || r === 'farm') return true;
+  if (r === 'heroe' || r === 'farm') return true;
+  // MODO TO DO LIST: sólo la lista (las aldeas hacen lo que dice); nunca junto con los otros
+  if (r === 'lista' || modo === 'lista') return MODO_ROL[modo] === r;
+  if (modo === 'todo') return true;
   return MODO_ROL[modo] === r;
+}
+
+/* todo.txt en la carpeta de la extensión: si cambió desde la última vez, pasa
+   a ser la lista (así se la puedo dejar escrita sin abrir el panel). La
+   extensión sin empaquetar lee el archivo del disco en cada fetch. */
+async function importarArchivoLista() {
+  let t = '';
+  try {
+    const r = await fetch(chrome.runtime.getURL('todo.txt'), { cache: 'no-store' });
+    if (!r.ok) return;
+    t = (await r.text()).replace(/\r\n/g, '\n').trim();
+  } catch (e) { return; }
+  if (!t) return;
+  const c = (await get('tb_cfg', null)) || {};
+  const l = esObjeto(c.lista) ? c.lista : {};
+  if (l.archivo === t) return;
+  c.lista = Object.assign({}, CFG_DEF.lista, l, { texto: t, archivo: t });
+  await set('tb_cfg', c);
+  const P = TB_LISTA.parsear(t, await get('tb_aldeas', []));
+  await log('TO DO: cargué la lista de todo.txt — ' + Object.keys(P.porAldea).length + ' aldea(s)' +
+            (P.errores.length ? ', ⚠ ' + P.errores.map(e => 'línea ' + e.linea + ': ' + e.msg).join(' | ') : ''), 'lista');
 }
 // ¿necesita pestaña? la farm list por API sólo muestra su pestaña en MODO FARM o TODO
 function tabNecesaria(cfg, r) {
@@ -216,8 +248,42 @@ function tabNecesaria(cfg, r) {
 /* ───────────── vigilante ─────────────
    Cada minuto: repone pestañas caídas, cierra las de lo que está pausado y
    destraba las que se quedaron colgadas. */
+/* ajustes.json en la carpeta de la extensión (29/09): lo que el usuario me
+   pide cambiar sin abrir el panel ("dejá apagada la farm list"). Se aplica
+   UNA vez cada vez que el archivo cambia; después manda el panel.
+   { "farm": false, "heroe": false, "recursosHeroe": false, "modo": "lista",
+     "npc": true, "npcMaxDia": 30, "caballosHoras": 2 } — todas opcionales.
+   "heroe" = aventuras; "recursosHeroe" = pasarle al establo lo del inventario. */
+async function importarAjustes() {
+  let t = '';
+  try {
+    const r = await fetch(chrome.runtime.getURL('ajustes.json'), { cache: 'no-store' });
+    if (!r.ok) return;
+    t = (await r.text()).trim();
+  } catch (e) { return; }
+  if (!t || (await get('tb_ajustes_archivo', '')) === t) return;
+  let a;
+  try { a = JSON.parse(t); } catch (e) { await log('ajustes.json no es JSON válido: ' + e.message); await set('tb_ajustes_archivo', t); return; }
+  const c = (await get('tb_cfg', null)) || {};
+  const hechos = [];
+  const sub = (k, campo, v, txt) => { c[k] = Object.assign({}, c[k] || {}, { [campo]: v }); hechos.push(txt); };
+  if (typeof a.farm === 'boolean') sub('farm', 'on', a.farm, 'farm list ' + (a.farm ? 'prendida' : 'apagada'));
+  if (typeof a.heroe === 'boolean') sub('heroe', 'on', a.heroe, 'héroe ' + (a.heroe ? 'prendido' : 'apagado'));
+  if (typeof a.npc === 'boolean') sub('lista', 'npc', a.npc, 'NPC ' + (a.npc ? 'prendido' : 'apagado'));
+  if (typeof a.recursosHeroe === 'boolean') sub('lista', 'heroe', a.recursosHeroe, 'recursos del héroe ' + (a.recursosHeroe ? 'sí' : 'NO'));
+  if (Number(a.npcMaxDia) >= 0 && a.npcMaxDia !== undefined) sub('lista', 'npcMaxDia', Number(a.npcMaxDia), 'máx. ' + Number(a.npcMaxDia) + ' NPC por día');
+  if (Number(a.caballosHoras) > 0) sub('lista', 'caballosHoras', Number(a.caballosHoras), 'establo hasta ' + Number(a.caballosHoras) + ' h');
+  if (['lista', 'tropas', 'farm', 'construccion', 'todo'].indexOf(a.modo) >= 0) { c.modo = a.modo; hechos.push('MODO ' + a.modo.toUpperCase()); }
+  await set('tb_cfg', c);
+  await set('tb_ajustes_archivo', t);
+  if (c.farm && c.farm.on === false) chrome.alarms.clear('tb_farm');
+  await log('ajustes.json: ' + (hechos.join(' · ') || 'nada que cambiar'));
+}
+
 async function vigilar() {
+  await importarAjustes();
   if (!(await get('tb_run', false))) return;
+  await importarArchivoLista();
   await limpiarPestanas(false);
   const cfg = await leerCfg();
   const m = await tabsMapa();
@@ -509,6 +575,63 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         responder({ ok: true });
         break;
       }
+      /* la lista de aldeas de la derecha (cualquier página): entran las nuevas,
+         salen las que ya no están. Si faltan más de 2 de golpe no borro nada:
+         la lista podía venir filtrada por un grupo. */
+      case 'aldeasSync': {
+        const viejas = await get('tb_aldeas', []);
+        const porDid = {};
+        viejas.forEach(a => { porDid[String(a.did)] = a; });
+        const nuevas = (msg.aldeas || []).filter(a => a && a.did).map(a => {
+          const v = porDid[String(a.did)];
+          return { did: String(a.did), nombre: a.nombre || (v && v.nombre) || ('aldea ' + a.did), tribu: (v && v.tribu) || 0 };
+        });
+        if (!nuevas.length) { responder({ ok: false, aldeas: viejas }); break; }
+        const ids = new Set(nuevas.map(a => a.did));
+        let fuera = viejas.filter(a => !ids.has(String(a.did)));
+        const entran = nuevas.filter(a => !porDid[a.did]);
+        const renombradas = nuevas.filter(a => porDid[a.did] && porDid[a.did].nombre !== a.nombre);
+        let lista = nuevas;
+        if (fuera.length > 2) { lista = nuevas.concat(fuera); fuera = []; }
+        await set('tb_aldeas', lista);
+        const cambios = [
+          entran.length ? 'nueva(s): ' + entran.map(a => a.nombre).join(', ') : '',
+          fuera.length ? 'ya no está(n): ' + fuera.map(a => a.nombre).join(', ') : '',
+          renombradas.length ? 'renombrada(s): ' + renombradas.map(a => porDid[a.did].nombre + ' → ' + a.nombre).join(', ') : '',
+        ].filter(Boolean).join(' · ');
+        if (cambios) await log('aldeas: ' + cambios);
+        responder({ ok: true, aldeas: lista, cambios });
+        break;
+      }
+      /* NPC con oro: cuántos van hoy (tope del panel) y si se acabó el oro */
+      case 'npc': {
+        const hoy = new Date().toLocaleDateString('sv');
+        let c = await get('tb_npc', {});
+        if (c.dia !== hoy) c = { dia: hoy, n: 0 };
+        if (msg.sumar) c.n++;
+        if (msg.sinOro) c.sinOro = true;
+        if (msg.sumar || msg.sinOro) await set('tb_npc', c);
+        // el rescate de cereal (critico) no respeta el tope del día: si no, se mueren las tropas
+        responder({ ok: !c.sinOro && (msg.critico || c.n < (msg.max || 30)), n: c.n, sinOro: !!c.sinOro });
+        break;
+      }
+      case 'unidadesDe': {
+        const u = await get('tb_unidades', {});
+        u[String(msg.clave)] = msg.filas || [];
+        await set('tb_unidades', u);
+        responder({ ok: true });
+        break;
+      }
+      case 'listaEstado': {   // qué está haciendo cada aldea de la lista (para el panel)
+        const e = await get('tb_lista_estado', {});
+        const t = Date.now();
+        const vivas = new Set((msg.dids || []).map(String));
+        Object.keys(e).forEach(d => { if (vivas.size && !vivas.has(d)) delete e[d]; });
+        Object.keys(msg.est || {}).forEach(d => { e[d] = { t, txt: msg.est[d] }; });
+        await set('tb_lista_estado', e);
+        responder({ ok: true });
+        break;
+      }
       case 'aldeaNombre': {
         const l = await get('tb_aldeas', []);
         const i = l.findIndex(a => String(a.did) === String(msg.did));
@@ -577,6 +700,8 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
           diag: await get('tb_diag', null),
           lock: await get('tb_lock', null),
           origen: await get('tb_origen', ''),
+          listaEstado: await get('tb_lista_estado', {}),
+          npc: await get('tb_npc', {}),
         });
         break;
       }
@@ -596,7 +721,15 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
 chrome.runtime.onInstalled.addListener(d => enFila(async () => {
   await set('tb_lock', null);
   await set('tb_espera', {});
-  if (d && d.reason === 'install') { await set('tb_run', false); await log('extensión instalada'); return; }
+  if (d && d.reason === 'install') {
+    // instalación nueva (otro jugador): las dos migraciones de abajo eran para MI cuenta
+    // (forzaban MODO TROPAS / TO DO y arrancaban solo); acá quedan marcadas como hechas
+    await set('tb_mig_0927', true);
+    await set('tb_mig_0929', true);
+    await set('tb_run', false);
+    await log('extensión instalada');
+    return;
+  }
   const v = chrome.runtime.getManifest().version;
   // pedido del usuario el 27/09: MODO TROPAS, farm list apagada y dejarlo andando (una sola vez)
   if (!(await get('tb_mig_0927', false))) {
@@ -610,6 +743,17 @@ chrome.runtime.onInstalled.addListener(d => enFila(async () => {
     await arrancar();
     return;
   }
+  // pedido del usuario el 29/09: MODO TO DO LIST con la lista de todo.txt; la farm list sigue (prioridad 1)
+  if (!(await get('tb_mig_0929', false))) {
+    await set('tb_mig_0929', true);
+    await importarArchivoLista();
+    const c = (await get('tb_cfg', null)) || {};
+    c.modo = 'lista';
+    c.lista = Object.assign({}, CFG_DEF.lista, esObjeto(c.lista) ? c.lista : {}, { on: true });
+    c.farm = Object.assign({}, c.farm || {}, { on: true });
+    await set('tb_cfg', c);
+    await log('v' + v + ': MODO TO DO LIST — cada aldea hace sólo lo que dice la lista; la farm list sigue de fondo');
+  }
   if (!(await get('tb_run', false))) { await log('extensión actualizada a v' + v + ' (detenido)'); return; }
   await log('extensión actualizada a v' + v + ' — sigo andando');
   chrome.alarms.create('tb_vigilar', { periodInMinutes: 1 });
@@ -620,6 +764,7 @@ chrome.runtime.onInstalled.addListener(d => enFila(async () => {
     if (await existeTab(m[r])) { try { await chrome.tabs.reload(m[r]); } catch (e) {} await new Promise(ok => setTimeout(ok, 700)); }
   }
   await limpiarPestanas(true);
+  await vigilar();   // abre/cierra las pestañas según el modo (TO DO LIST usa una sola)
   farmPorApi();
 }));
 

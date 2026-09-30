@@ -12,7 +12,8 @@ mano en un servidor x5 de Travian Legends (septiembre de 2026).
 ## Instalar (3 clics, una sola vez)
 
 1. `chrome://extensions` → **Modo de desarrollador** activado
-2. **Cargar descomprimida** → `D:\TravianBot\extension`
+2. **Cargar descomprimida** → la carpeta `extension` del repo (o la carpeta
+   `TravianBot` del zip que arma `python tools/empaquetar.py`)
 3. Ya está. Cada vez que cambie el código: botón ↻ en la tarjeta de la extensión.
 
 Chrome muestra un globo "Desactiva las extensiones en modo de desarrollador" al
@@ -60,6 +61,89 @@ listas son de la cuenta, así que normalmente da igual.
 - **Una aldea por vuelta**: rota entre las aldeas que tengan algo tildado.
   Con 9 aldeas son ~4 páginas por pasada en vez de 36.
 
+## TO DO LIST (v5.0, 29/09/2026)
+
+Una lista por aldea, y **cada aldea hace sólo lo que dice**. La farm list sigue
+de fondo (prioridad 1). Se usa con el **MODO TO DO LIST** y trabaja con **una
+sola pestaña** que no carga páginas: todo sale por pedidos directos al juego.
+
+```
+00: campos                          # campos hasta el máximo
+04T: Warehouse 20, Tournament Square 17, hospital, tropas Clubswinger + Teutonic Knight
+07: tropas Marauder/Steppe Rider    # la primera que esté investigada
+010: campos 10, tropas Clubswinger + Teutonic Knight
+todas: fiestas                      # grande si se puede, si no chica
+```
+
+| orden | qué hace |
+|---|---|
+| `campos 10` / `madera 12` | sube los campos (el de menor nivel en verde); sin número, hasta el máximo |
+| `Warehouse 20` / `Almacén 20` | sube **todas** las copias de ese edificio hasta el nivel (inglés o castellano) |
+| `!Tournament Square 10` | **PRIORIDAD** (también `prioridad …` o `… primero`): ver abajo |
+| `cereal` | sólo campos de cereal (lo mismo `madera`, `barro`, `hierro`) |
+| `tropas A + B` | entrena sin parar; `A/B` = A, y si no está investigada, B |
+| `hospital` | cura a los heridos con lo que alcance |
+| `fiestas` / `fiestas chicas` | fiesta grande donde el ayuntamiento y los recursos lo permitan, si no chica |
+| `todas:` · `nada` · `#` | para todas las aldeas · esa aldea quieta · comentario |
+
+**Prioridad dentro de cada aldea**: 1) el establo hasta tener 2 h de cola
+(configurable), completando con los **recursos del héroe** lo que falte;
+2) las obras; 3) el hospital; 4) cuartel y taller hasta 2 h. Si la aldea no
+tiene obras pendientes, las colas siguen creciendo de a 2 h (hasta 24 h).
+
+**PRIORIDAD** (`!` delante de una obra, v5.3, 30/09/2026): esa obra va **antes
+que el establo** y, mientras no esté cumplida, las tropas de la aldea sólo usan
+lo que sobra por encima del costo de su próximo nivel (🔒 en el estado); esa
+aldea no recibe recursos del héroe ni NPC para tropas, y la fiesta espera si se
+comería la reserva. Si el edificio **no existe**, el bot lo **construye** en una
+casilla libre (si no hay ninguna, lo avisa y las tropas siguen normal). Si le
+faltan requisitos, tampoco reserva nada.
+
+**NPC con oro** (viene **apagado**: se tilda en el panel; tope de NPC por día, 30):
+sólo cuando sirve para algo grande. En tropas, si con el NPC la cola llega a
+llenar **1 h o más** (y 30 min más que sin NPC); en el establo antes le pasa del
+héroe lo que falte en total (el hierro y el cereal que sobran). En obras, si el
+obrero está libre, faltaba **1 h o más** para tener los recursos, la obra cuesta
+2.000 o más y el total de la aldea alcanza. Cada NPC cuesta 3 de oro.
+
+**Rescate de cereal** (automático, en cada vuelta): en las aldeas con cereal
+negativo (en rojo en *Statistics → Resources → Warehouse*), cuando el granero
+baja al **5 %** (o le quedan 10 min o menos) lo sube al **15 %**. Primero con el
+cereal del héroe (que no se usa para nada más); si no alcanza, un NPC que pasa
+lo demás a cereal (sólo con el NPC tildado). Ese NPC no cuenta para el tope del día. Además, ningún NPC de
+tropas u obras baja el cereal de lo que había (hasta el 15 % del granero).
+
+La lista se escribe en la tarjeta **TO DO LIST** del panel (guardar o
+Ctrl+Enter); debajo muestra cómo entendió cada línea y qué está haciendo cada
+aldea. En la extensión también se puede dejar en `extension/todo.txt`: cuando
+el archivo cambia, el bot lo toma solo (el archivo no va al repo).
+
+Las aldeas se leen de la lista de la derecha en cada vuelta: las nuevas entran
+y las perdidas salen solas (si faltan más de 2 de golpe no borra nada, por si
+la lista venía filtrada por un grupo).
+
+### Cómo se hizo sin cargar páginas (verificado en rog.x5 el 29/09)
+- **Tropas y hospital**: GET del edificio + POST de `form[name=snd]` (el
+  hospital usa el mismo formulario, botón "Heal"). Costo por unidad en
+  `.resourceWrapper i.rNBig`, tiempo por unidad en `.inlineIcon.duration`.
+- **Obras**: el botón verde trae `window.location.href = '/dorf2.php?id=…&gid=…&action=build&checksum=…'`;
+  se pide ese enlace. Sin recursos no hay botón verde y sí `.errorMessage`
+  ("Enough resources on …").
+- **Fiestas**: `/village/statistics/culturepoints`, columna *Celebrations*
+  (tiempo = hay fiesta, `-` = sin ayuntamiento). Se piden con
+  `build.php?id=…&gid=24&action=celebration&do=1|2&t=1` (1 chica, 2 grande).
+- **Héroe**: `GET /api/v1/hero/v2/screen/inventory` (typeId 145-148 =
+  madera/barro/hierro/cereal) y `hero/v2/inventory/use-item` en dos pasos
+  (TwoStepAction): `PUT` con `{action:'inventory', itemId, amount, villageId}`
+  devuelve `x-nonce`; el mismo cuerpo por `POST` con `X-Nonce`. Acepta
+  cualquier aldea sin cambiar la activa.
+- **NPC**: el botón "Redeem" del diálogo `marketplace/exchange-resources`
+  llama a `Travian.Game.PremiumFeature.NpcTrader` → TwoStepAction
+  `premium/npc-trader` con `{villageId, desired:{lumber,clay,iron,crop},
+  action:'premiumFeature'}` (PUT → x-nonce → POST). 3 oro.
+- **Costo de una obra**: `.upgradeBuilding i.r1Big..r4Big` (nivel siguiente) y
+  `.errorMessage .timer[value]` = segundos hasta tener los recursos.
+
 ## Cómo evita pisarse con vos y consigo mismo
 
 Travian tiene **una sola aldea activa por sesión** y las 4 pestañas comparten
@@ -91,6 +175,16 @@ pestañas de fondo y el service worker con prioridad *Idle* / modo eficiencia
 mensaje entre pestaña y service worker puede tardar 5-40 s. Por eso cada paso
 guarda su avance ANTES de apretar un botón que recarga la página, y el service
 worker guarda todo en memoria (no lee el disco en cada consulta).
+
+## Cambios v5.4 (30/09/2026) — para compartir con otro jugador
+
+- `python tools/empaquetar.py` arma `dist/TravianBot-extension-<versión>.zip`
+  (sin `todo.txt` ni `ajustes.json`) y copia `TravianBot.user.js`.
+- Instalación nueva: arranca detenida y con el **NPC con oro apagado** (antes
+  una actualización le aplicaba los ajustes de mi cuenta y arrancaba sola).
+- TO DO LIST: reconoce aldeas con **espacios** en el nombre ("Nueva aldea",
+  "Capua 02") y con letras que no son latinas; separalas con coma.
+- El rescate de cereal no hace NPC si el NPC está destildado.
 
 ## v4 (27/09/2026) — MODOS y rondas por edificio
 - **MODO** (arriba en el panel): TROPAS · FARM · CONSTRUCCIÓN · TODO. El modo

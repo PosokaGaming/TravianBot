@@ -64,7 +64,7 @@ def main():
            '// @name         TravianBot',
            '// @namespace    https://github.com/%s' % (repo or 'TravianBot'),
            '// @version      %s' % version,
-           '// @description  Bot para Travian Legends: farm list, tropas por prioridad de cola, héroe y construcción, con modos. Una sola pestaña.',
+           '// @description  Bot para Travian Legends: TO DO LIST por aldea, farm list, tropas por prioridad de cola, héroe y construcción, con modos. Una sola pestaña.',
            '// @author       TravianBot']
     cab += ['// @match        %s' % m for m in matches]
     cab += ['// @grant        GM_getValue',
@@ -108,6 +108,7 @@ def main():
         "'use strict';",
         'const TB_CSS = %s;' % json.dumps(css, ensure_ascii=False),
         'const TB_HTML = %s;' % json.dumps(cuerpo, ensure_ascii=False),
+        leer(EXT / 'lista.js'),
         leer(SRC / 'nucleo.js'),
         leer(SRC / 'panel-shell.js'),
         'function panelMain(document, bg) {',

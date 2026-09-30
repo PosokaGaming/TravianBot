@@ -14,8 +14,8 @@
 const TB = (function () {
   'use strict';
 
-  const ROLES  = ['tropas', 'heroe', 'farm', 'recursos'];
-  const NOMBRE = { tropas: 'Tropas', heroe: 'Héroe', farm: 'Farm list', recursos: 'Construcción' };
+  const ROLES  = ['tropas', 'heroe', 'farm', 'recursos', 'lista'];
+  const NOMBRE = { tropas: 'Tropas', heroe: 'Héroe', farm: 'Farm list', recursos: 'Construcción', lista: 'TO DO' };
 
   const CFG_DEF = {
     // plan = { '<did>': { '<gid>': { cada:[min,max] seg, u:[{t,min,max,usarMax}] } } }
@@ -23,7 +23,8 @@ const TB = (function () {
     heroe   : { on: true, saludMin: 30, exigirSalud: true, elegir: 'corta', cadaSeg: 100 },
     farm    : { on: true, listas: 'todas', cadaSeg: 69, did: '', modo: 'api' },
     recursos: { on: true, cada: [180, 300], unaPorVuelta: true, aldeas: {} },
-    modo: 'todo',   // 'tropas' | 'farm' | 'construccion' | 'todo'
+    lista   : { on: true, texto: '', cada: [60, 90], caballosHoras: 2, heroe: true, npc: false, npcMaxDia: 30 },   // TO DO LIST (lista.js); npc gasta oro: apagado de fábrica
+    modo: 'todo',   // 'lista' | 'tropas' | 'farm' | 'construccion' | 'todo'
     cerrarAlParar: false,
     debug: false,
   };
@@ -64,11 +65,14 @@ const TB = (function () {
   /* ───────────── modos ─────────────
      MODO TROPAS / FARM / CONSTRUCCIÓN: el bot se dedica al modo elegido; la
      farm list y el héroe siguen de fondo si están tildados. TODO = todo. */
-  const MODO_ROL = { tropas: 'tropas', farm: 'farm', construccion: 'recursos' };
+  const MODO_ROL = { tropas: 'tropas', farm: 'farm', construccion: 'recursos', lista: 'lista' };
   function rolActivo(cfg, r) {
     if (!cfg[r] || !cfg[r].on) return false;
     const modo = cfg.modo || 'todo';
-    if (modo === 'todo' || r === 'heroe' || r === 'farm') return true;
+    if (r === 'heroe' || r === 'farm') return true;
+    // MODO TO DO LIST: sólo la lista; nunca junto con los otros
+    if (r === 'lista' || modo === 'lista') return MODO_ROL[modo] === r;
+    if (modo === 'todo') return true;
     return MODO_ROL[modo] === r;
   }
 
@@ -94,7 +98,7 @@ const TB = (function () {
     const actual = ss.get('tb_rol_actual');
     if (actual && rolActivo(cfg, actual) && actual !== 'farm') return actual;
     let mejor = null, min = Infinity;
-    for (const r of ['tropas', 'recursos', 'heroe']) {
+    for (const r of ['lista', 'tropas', 'recursos', 'heroe']) {
       if (!rolActivo(cfg, r)) continue;
       const n = get('tb_next_' + r, 0) || 0;
       if (n < min) { min = n; mejor = r; }
@@ -265,6 +269,44 @@ const TB = (function () {
         set('tb_aldeas', Object.values(porDid));
         return { ok: true };
       }
+      case 'aldeasSync': {   // la lista de la derecha: entran las nuevas, salen las perdidas (si faltan >2, no borro)
+        const viejas = get('tb_aldeas', []);
+        const porDid = {};
+        viejas.forEach(a => { porDid[String(a.did)] = a; });
+        const nuevas = (msg.aldeas || []).filter(a => a && a.did).map(a => {
+          const v = porDid[String(a.did)];
+          return { did: String(a.did), nombre: a.nombre || (v && v.nombre) || ('aldea ' + a.did), tribu: (v && v.tribu) || 0 };
+        });
+        if (!nuevas.length) return { ok: false, aldeas: viejas };
+        const ids = new Set(nuevas.map(a => a.did));
+        let fuera = viejas.filter(a => !ids.has(String(a.did)));
+        const entran = nuevas.filter(a => !porDid[a.did]);
+        let lista = nuevas;
+        if (fuera.length > 2) { lista = nuevas.concat(fuera); fuera = []; }
+        set('tb_aldeas', lista);
+        const cambios = [entran.length ? 'nueva(s): ' + entran.map(a => a.nombre).join(', ') : '',
+                         fuera.length ? 'ya no está(n): ' + fuera.map(a => a.nombre).join(', ') : ''].filter(Boolean).join(' · ');
+        if (cambios) log('aldeas: ' + cambios);
+        return { ok: true, aldeas: lista, cambios };
+      }
+      case 'npc': {   // NPC con oro: cuántos van hoy
+        const hoy = new Date().toLocaleDateString('sv');
+        let c = get('tb_npc', {});
+        if (c.dia !== hoy) c = { dia: hoy, n: 0 };
+        if (msg.sumar) c.n++;
+        if (msg.sinOro) c.sinOro = true;
+        if (msg.sumar || msg.sinOro) set('tb_npc', c);
+        return { ok: !c.sinOro && (msg.critico || c.n < (msg.max || 30)), n: c.n, sinOro: !!c.sinOro };
+      }
+      case 'unidadesDe': { const u = get('tb_unidades', {}); u[String(msg.clave)] = msg.filas || []; set('tb_unidades', u); return { ok: true }; }
+      case 'listaEstado': {
+        const e = get('tb_lista_estado', {}), t = Date.now();
+        const vivas = new Set((msg.dids || []).map(String));
+        Object.keys(e).forEach(d => { if (vivas.size && !vivas.has(d)) delete e[d]; });
+        Object.keys(msg.est || {}).forEach(d => { e[d] = { t, txt: msg.est[d] }; });
+        set('tb_lista_estado', e);
+        return { ok: true };
+      }
       case 'aldeaNombre': {
         const l = get('tb_aldeas', []);
         const i = l.findIndex(a => String(a.did) === String(msg.did));
@@ -293,6 +335,8 @@ const TB = (function () {
           unidades: get('tb_unidades', {}), edificios: get('tb_edificios', {}), herreria: get('tb_herreria', {}),
           aldeas: get('tb_aldeas', []), scan: get('tb_scan', { activo: false }), diag: get('tb_diag', null),
           lock: null, origen: location.origin,
+          listaEstado: get('tb_lista_estado', {}),
+          npc: get('tb_npc', {}),
         };
       }
       case 'guardarCfg':    set('tb_cfg', msg.cfg); return { ok: true };
