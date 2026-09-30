@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Travian Bot",
-  "version": "4.4.0",
-  "description": "Cuatro pestañas independientes: tropas, aventuras del héroe, farm list y subir campos de recursos.",
+  "version": "5.4.0",
+  "description": "TO DO LIST por aldea (tropas, obras, hospital, fiestas) sin cargar páginas, farm list por la API, tropas, héroe y construcción.",
   "permissions": [
     "tabs",
     "storage",
@@ -98,6 +98,7 @@
         "*://*.travian.org/*"
       ],
       "js": [
+        "lista.js",
         "content.js"
       ],
       "run_at": "document_end",

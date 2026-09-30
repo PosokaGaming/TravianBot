@@ -11,12 +11,32 @@ cosa.
 
 ## Instalar
 
+Hay dos formas. **Usá una sola**, nunca las dos juntas.
+
+**A · Tampermonkey (recomendada: se actualiza sola)**
+
 1. Instalá la extensión [Tampermonkey](https://www.tampermonkey.net/) en tu
-   navegador.
+   navegador. En Chrome, en la tarjeta de Tampermonkey
+   (`chrome://extensions` → Detalles) prendé **Permitir scripts de usuario**.
 2. Abrí **[TravianBot.user.js](../../raw/main/TravianBot.user.js)** y tocá
    **Instalar** en la pantalla de Tampermonkey.
 3. Entrá a tu Travian con la sesión iniciada. Abajo a la derecha aparece el
    botón verde **TB**: ahí está el panel.
+
+**B · Extensión de Chrome (zip)**
+
+1. Bajá `TravianBot-extension-<versión>.zip` (de *Releases* o el que te
+   pasaron) y descomprimilo: queda una carpeta `TravianBot`.
+2. `chrome://extensions` → prendé **Modo de desarrollador** → **Cargar
+   descomprimida** → elegí esa carpeta. No la borres ni la muevas después.
+3. Con Travian abierto: ícono de la extensión → **▶ ARRANCAR**.
+
+Para actualizar la extensión: reemplazá el contenido de la carpeta por el del
+zip nuevo y tocá ↻ en su tarjeta de `chrome://extensions` (la configuración y
+la lista se conservan).
+
+La primera vez el bot arranca **detenido**, en MODO TROPAS y con el NPC con
+oro **apagado**: nada gasta oro hasta que lo tildes vos.
 
 ### Actualizaciones automáticas
 
@@ -29,6 +49,7 @@ actualizaciones*) y, si hay un `@version` más nuevo, se actualiza solo.
 1. Abrí el panel (**TB**) y tocá **▶ ARRANCAR**. La primera vez escanea tus
    aldeas, cuarteles, establos, talleres y herrerías (tarda un par de minutos).
 2. Elegí el **MODO** arriba del panel:
+   - **TO DO LIST**: cada aldea hace sólo lo que dice tu lista (ver abajo).
    - **TROPAS**: se dedica a entrenar tropas.
    - **FARM**: se dedica a la farm list.
    - **CONSTRUCCIÓN**: sube campos y edificios.
@@ -49,6 +70,67 @@ actualizaciones*) y, si hay un `@version` más nuevo, se actualiza solo.
 si abrís más, sólo una manda y las otras no hacen nada. Conviene desactivar el
 ahorro de memoria de Chrome para Travian (`chrome://settings/performance`),
 porque si Chrome congela la pestaña el bot se detiene.
+
+## TO DO LIST (v5.0, 29/09/2026)
+
+Una lista por aldea, y **cada aldea hace sólo lo que dice**. La farm list sigue
+de fondo (prioridad 1). Se usa con el **MODO TO DO LIST** y trabaja con **una
+sola pestaña** que no carga páginas: todo sale por pedidos directos al juego.
+
+```
+00: campos                          # campos hasta el máximo
+04T: Warehouse 20, Tournament Square 17, hospital, tropas Clubswinger + Teutonic Knight
+07: tropas Marauder/Steppe Rider    # la primera que esté investigada
+010: campos 10, tropas Clubswinger + Teutonic Knight
+todas: fiestas                      # grande si se puede, si no chica
+```
+
+| orden | qué hace |
+|---|---|
+| `campos 10` / `madera 12` | sube los campos (el de menor nivel en verde); sin número, hasta el máximo |
+| `Warehouse 20` / `Almacén 20` | sube **todas** las copias de ese edificio hasta el nivel (inglés o castellano) |
+| `!Tournament Square 10` | **PRIORIDAD** (también `prioridad …` o `… primero`): ver abajo |
+| `cereal` | sólo campos de cereal (lo mismo `madera`, `barro`, `hierro`) |
+| `tropas A + B` | entrena sin parar; `A/B` = A, y si no está investigada, B |
+| `hospital` | cura a los heridos con lo que alcance |
+| `fiestas` / `fiestas chicas` | fiesta grande donde el ayuntamiento y los recursos lo permitan, si no chica |
+| `todas:` · `nada` · `#` | para todas las aldeas · esa aldea quieta · comentario |
+
+**Prioridad dentro de cada aldea**: 1) el establo hasta tener 2 h de cola
+(configurable), completando con los **recursos del héroe** lo que falte;
+2) las obras; 3) el hospital; 4) cuartel y taller hasta 2 h. Si la aldea no
+tiene obras pendientes, las colas siguen creciendo de a 2 h (hasta 24 h).
+
+**PRIORIDAD** (`!` delante de una obra, v5.3, 30/09/2026): esa obra va **antes
+que el establo** y, mientras no esté cumplida, las tropas de la aldea sólo usan
+lo que sobra por encima del costo de su próximo nivel (🔒 en el estado); esa
+aldea no recibe recursos del héroe ni NPC para tropas, y la fiesta espera si se
+comería la reserva. Si el edificio **no existe**, el bot lo **construye** en una
+casilla libre (si no hay ninguna, lo avisa y las tropas siguen normal). Si le
+faltan requisitos, tampoco reserva nada.
+
+**NPC con oro** (viene **apagado**: se tilda en el panel; tope de NPC por día, 30):
+sólo cuando sirve para algo grande. En tropas, si con el NPC la cola llega a
+llenar **1 h o más** (y 30 min más que sin NPC); en el establo antes le pasa del
+héroe lo que falte en total (el hierro y el cereal que sobran). En obras, si el
+obrero está libre, faltaba **1 h o más** para tener los recursos, la obra cuesta
+2.000 o más y el total de la aldea alcanza. Cada NPC cuesta 3 de oro.
+
+**Rescate de cereal** (automático, en cada vuelta): en las aldeas con cereal
+negativo (en rojo en *Statistics → Resources → Warehouse*), cuando el granero
+baja al **5 %** (o le quedan 10 min o menos) lo sube al **15 %**. Primero con el
+cereal del héroe (que no se usa para nada más); si no alcanza, un NPC que pasa
+lo demás a cereal (sólo con el NPC tildado). Ese NPC no cuenta para el tope del día. Además, ningún NPC de
+tropas u obras baja el cereal de lo que había (hasta el 15 % del granero).
+
+La lista se escribe en la tarjeta **TO DO LIST** del panel (guardar o
+Ctrl+Enter); debajo muestra cómo entendió cada línea y qué está haciendo cada
+aldea. En la extensión también se puede dejar en `extension/todo.txt`: cuando
+el archivo cambia, el bot lo toma solo (el archivo no va al repo).
+
+Las aldeas se leen de la lista de la derecha en cada vuelta: las nuevas entran
+y las perdidas salen solas (si faltan más de 2 de golpe no borra nada, por si
+la lista venía filtrada por un grupo).
 
 ## Cómo trabaja
 

@@ -73,3 +73,15 @@ input[type=text] { flex: 1; min-width: 60px; }
 .modo{margin:8px 0 2px;font-weight:700;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .modo select{font-weight:700;padding:2px 6px}
 .modo small{font-weight:400;opacity:.7;width:100%}
+
+/* TO DO LIST */
+textarea { width: 100%; background: #141416; border: 1px solid #44444c; color: #eee; border-radius: 5px;
+           padding: 5px 6px; font: 11px/1.45 ui-monospace, Consolas, monospace; resize: vertical; }
+details summary { cursor: pointer; }
+.ayuda { margin-top: 4px; line-height: 1.6; }
+.lrow { padding: 3px 0; border-bottom: 1px solid #2c2c32; }
+.lrow:last-child { border-bottom: 0; }
+.lrow b { color: #e6e6e6; margin-right: 4px; }
+.lord { color: #b9c4d6; font-size: 11px; }
+.lest { color: #8fc79a; font-size: 10px; margin-top: 1px; }
+.lerr { color: #ff9b8f; font-size: 11px; margin-top: 3px; }
