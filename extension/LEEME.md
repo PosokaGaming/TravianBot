@@ -181,6 +181,15 @@ mensaje entre pestaña y service worker puede tardar 5-40 s. Por eso cada paso
 guarda su avance ANTES de apretar un botón que recarga la página, y el service
 worker guarda todo en memoria (no lee el disco en cada consulta).
 
+## Cambios v5.10.4 (01/10/2026, 04:00) — primer envío real 10 → 2
+
+03:55 NPC en 10 con el granero al 100 % (madera/barro/hierro al tope de 800.000) y 03:56 envío a 2 de lo
+que le faltaba para el cereal 17→18 (10.173/10.174/4.002: el hierro, recortado porque el almacén de 2 estaba
+casi lleno). Arreglos: (1) si el almacén no tiene lugar para convertir el cereal (< 5 % del granero), no hace
+el NPC (iba a gastar 3 oro cada 10 min sin cambiar nada); (2) `RECARGA_PENDIENTE`: con la pestaña en
+segundo plano Chrome demoró el meta refresh ~1 min y el bucle arrancó la vuelta en la página vieja; ahora no
+arranca y, si la recarga se atrasa más de 3 s, la hace él.
+
 ## Cambios v5.10.3 (01/10/2026, 03:45) — la vuelta espera la recarga
 
 `programarEn` ponía la próxima vuelta a +3 s, pero el meta refresh nunca es antes de +4 s (y con la pausa por

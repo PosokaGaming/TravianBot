@@ -86,6 +86,7 @@
        por página), la vuelta arrancaba en la página vieja y la recarga la cortaba a los pocos
        segundos ("TO DO · 5: Failed to fetch", 01/10 03:33) */
     if (!sinRecarga) ts = Math.max(ts, ahora() + s * 1000 + 1500);
+    RECARGA_PENDIENTE = !sinRecarga;
     NEXT = ts; RUN = true;
     await bg({ tipo: 'programar', rol: ROL, next: ts });
     return ts - ahora();
@@ -116,7 +117,12 @@
     return s;
   }
   let respaldoRecarga = 0;
+  /* esta página ya tiene su recarga programada: la vuelta siguiente va en la página NUEVA. Con la
+     pestaña en segundo plano Chrome a veces demora el meta refresh hasta un minuto, y el bucle
+     arrancaba la vuelta en la página vieja; la recarga la cortaba al rato (01/10 03:54). */
+  let RECARGA_PENDIENTE = false;
   function cancelarRecarga() {
+    RECARGA_PENDIENTE = false;
     clearTimeout(respaldoRecarga);
     try { const m = document.querySelector('meta[http-equiv="refresh"][data-tb]'); if (m) m.remove(); } catch (e) {}
   }
@@ -2101,7 +2107,12 @@
     const partes = [];
     // 2 · NPC: ⅓ madera, ⅓ barro, ⅓ hierro (lo que no entre en el almacén queda como cereal)
     const clave = 'tb_lnpca_' + did;
-    if (ahora() - num(ss.get(clave)) >= 600000 && await npcPermitido(true)) {
+    /* si el almacén ya no tiene lugar para convertir el cereal, el NPC no sirve y gasta oro igual
+       (01/10 03:55: después del primero, madera/barro/hierro quedaron en 800.000 = tope y el cereal
+       siguió arriba del 95 %: cada 10 min habría hecho otro NPC de 3 oro que no cambiaba nada) */
+    const lugarAlmacen = [0, 1, 2].reduce((acc, i) => acc + Math.max(0, st.capW - st.cur[i]), 0);
+    if (lugarAlmacen < st.capG * 0.05) partes.push('💱 NPC no: el almacén está lleno (no hay dónde convertir el cereal)');
+    else if (ahora() - num(ss.get(clave)) >= 600000 && await npcPermitido(true)) {
       const total = suma(st.cur) - 60;
       const a = Math.max(0, Math.min(st.capW, Math.floor(total / 3)));
       const des = [a, a, a, Math.max(0, total - 3 * a)];
@@ -2698,6 +2709,10 @@
       }
     }
 
+    if (RECARGA_PENDIENTE) {   // la vuelta va en la página nueva; si la recarga se atrasa, la hago yo
+      if (ahora() - NEXT > 3000) { RECARGA_PENDIENTE = false; location.reload(); }
+      return;
+    }
     T_INICIO = ahora();
     bg({ tipo: 'trabajando', rol: ROL });   // sin esperar: cada ida y vuelta cuesta segundos con la PC cargada
     try {

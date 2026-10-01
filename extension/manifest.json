@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Travian Bot",
-  "version": "5.10.3",
+  "version": "5.10.4",
   "description": "TO DO LIST por aldea (tropas, obras, hospital, fiestas) sin cargar páginas, farm list por la API, tropas, héroe y construcción.",
   "permissions": [
     "tabs",
