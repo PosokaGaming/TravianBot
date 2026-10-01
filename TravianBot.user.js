@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TravianBot
 // @namespace    https://github.com/PosokaGaming/TravianBot
-// @version      5.8.1
+// @version      5.8.2
 // @description  Bot para Travian Legends: TO DO LIST por aldea, farm list, tropas por prioridad de cola, héroe y construcción, con modos. Una sola pestaña.
 // @author       TravianBot
 // @match        *://*.travian.com/*
@@ -547,7 +547,7 @@ const TB = (function () {
         parar('Captcha / control antibot (farm list)');
         return;
       }
-      if (h.indexOf('villageInput') < 0) { log('farm: la página no trae la sesión (HTTP ' + r.status + '), reintento', 'farm'); reintento = true; return; }
+      if (h.indexOf('villageInput') < 0 && h.indexOf('listEntry village') < 0) { log('farm: la página no trae la sesión (HTTP ' + r.status + '), reintento', 'farm'); reintento = true; return; }
       // ¿la sesión es de la cuenta del bot? si no, no le mando SUS listas
       const cuenta = new Set((get('tb_cuenta', null) || Object.keys(get('tb_edificios', {}) || {})).map(String));
       const enPagina = (h.match(/data-did="(\d+)"/g) || []).map(x => x.replace(/\D/g, ''));
@@ -2838,7 +2838,7 @@ setInterval(tictac, 250);
   async function traer(url, opciones) {
     const d = await traerDoc(url, opciones);
     if ($('#botprotection, .botProtection, form[name="botprotection"], #bot_check', d)) { const e = new Error('antibot'); e.parar = 'Captcha / control antibot en TO DO'; throw e; }
-    if (!$('input.villageInput', d) && $('input[type="password"]', d)) { const e = new Error('login'); e.parar = 'Sesión cerrada (TO DO)'; throw e; }
+    if (!$('input.villageInput', d) && !$('.listEntry.village', d) && $('input[type="password"]', d)) { const e = new Error('login'); e.parar = 'Sesión cerrada (TO DO)'; throw e; }
     if (!SYNC_RONDA) {
       SYNC_RONDA = true;
       await sincronizarAldeas(d);
@@ -2846,7 +2846,8 @@ setInterval(tictac, 250);
     }
     return d;
   }
-  const didDe = d => { const e = $('input.villageInput[data-did]', d); return e ? String(e.getAttribute('data-did')) : ''; };
+  // como cuidador (sitter) el juego no dibuja el input del nombre: la aldea activa sale de la lista lateral
+  const didDe = d => { const e = $('input.villageInput[data-did]', d) || $('.listEntry.village.active[data-did]', d); return e ? String(e.getAttribute('data-did')) : ''; };
   const urlDelBoton = b => { const m = (b && b.getAttribute('onclick') || '').match(/location\.href\s*=\s*'([^']+)'/); return m ? m[1].replace(/&amp;/g, '&') : ''; };
 
   /* formulario de entrenar/curar del edificio abierto */

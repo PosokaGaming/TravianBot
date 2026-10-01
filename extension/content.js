@@ -1466,7 +1466,7 @@
   async function traer(url, opciones) {
     const d = await traerDoc(url, opciones);
     if ($('#botprotection, .botProtection, form[name="botprotection"], #bot_check', d)) { const e = new Error('antibot'); e.parar = 'Captcha / control antibot en TO DO'; throw e; }
-    if (!$('input.villageInput', d) && $('input[type="password"]', d)) { const e = new Error('login'); e.parar = 'Sesión cerrada (TO DO)'; throw e; }
+    if (!$('input.villageInput', d) && !$('.listEntry.village', d) && $('input[type="password"]', d)) { const e = new Error('login'); e.parar = 'Sesión cerrada (TO DO)'; throw e; }
     if (!SYNC_RONDA) {
       SYNC_RONDA = true;
       await sincronizarAldeas(d);
@@ -1474,7 +1474,8 @@
     }
     return d;
   }
-  const didDe = d => { const e = $('input.villageInput[data-did]', d); return e ? String(e.getAttribute('data-did')) : ''; };
+  // como cuidador (sitter) el juego no dibuja el input del nombre: la aldea activa sale de la lista lateral
+  const didDe = d => { const e = $('input.villageInput[data-did]', d) || $('.listEntry.village.active[data-did]', d); return e ? String(e.getAttribute('data-did')) : ''; };
   const urlDelBoton = b => { const m = (b && b.getAttribute('onclick') || '').match(/location\.href\s*=\s*'([^']+)'/); return m ? m[1].replace(/&amp;/g, '&') : ''; };
 
   /* formulario de entrenar/curar del edificio abierto */

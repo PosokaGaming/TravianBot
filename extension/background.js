@@ -408,7 +408,7 @@ async function farmPorApi() {
       await parar('Captcha / control antibot (farm list)');
       return;
     }
-    if (h.indexOf('villageInput') < 0) { await log('farm: la página no trae la sesión (HTTP ' + r.status + '), reintento', 'farm'); reintento = true; return; }
+    if (h.indexOf('villageInput') < 0 && h.indexOf('listEntry village') < 0) { await log('farm: la página no trae la sesión (HTTP ' + r.status + '), reintento', 'farm'); reintento = true; return; }
     // ¿la sesión es de la cuenta del bot? (si entraste con otra cuenta en este perfil, no le mando SUS listas)
     const cuenta = new Set(((await get('tb_cuenta', null)) || Object.keys((await get('tb_edificios', {})) || {})).map(String));
     const enPagina = (h.match(/data-did="(\d+)"/g) || []).map(x => x.replace(/\D/g, ''));

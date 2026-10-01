@@ -146,7 +146,7 @@ const TB = (function () {
         parar('Captcha / control antibot (farm list)');
         return;
       }
-      if (h.indexOf('villageInput') < 0) { log('farm: la página no trae la sesión (HTTP ' + r.status + '), reintento', 'farm'); reintento = true; return; }
+      if (h.indexOf('villageInput') < 0 && h.indexOf('listEntry village') < 0) { log('farm: la página no trae la sesión (HTTP ' + r.status + '), reintento', 'farm'); reintento = true; return; }
       // ¿la sesión es de la cuenta del bot? si no, no le mando SUS listas
       const cuenta = new Set((get('tb_cuenta', null) || Object.keys(get('tb_edificios', {}) || {})).map(String));
       const enPagina = (h.match(/data-did="(\d+)"/g) || []).map(x => x.replace(/\D/g, ''));

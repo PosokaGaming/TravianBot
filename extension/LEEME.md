@@ -180,6 +180,12 @@ mensaje entre pestaña y service worker puede tardar 5-40 s. Por eso cada paso
 guarda su avance ANTES de apretar un botón que recarga la página, y el service
 worker guarda todo en memoria (no lee el disco en cada consulta).
 
+## Cambios v5.8.2 (30/09/2026, 22:50) — sesión de cuidador (sitter)
+
+Como cuidador el juego no dibuja `input.villageInput` (no se puede renombrar la aldea): el TO DO daba
+"no pude entrar a la aldea" en todas. `didDe` y los chequeos de sesión ahora usan también
+`.listEntry.village.active[data-did]`.
+
 ## Cambios v5.8.1 (30/09/2026, 22:35)
 
 Al cambiar de cuenta, la pestaña reprogramaba su espera de 8 s en cada tick (el bucle corre 4 s antes
