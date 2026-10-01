@@ -93,6 +93,7 @@ todas: fiestas                      # grande si se puede, si no chica
 | `cereal` | sólo campos de cereal (lo mismo `madera`, `barro`, `hierro`) |
 | `tropas A + B` | entrena sin parar; `A/B` = A, y si no está investigada, B |
 | `hospital` | cura a los heridos con lo que alcance |
+| `hero` · `no hero` | esa aldea usa los recursos del héroe, **también para obras** (si a la obra le falta y el héroe tiene todo lo que falta) · nunca. Si alguna aldea tiene `hero`, las demás no los usan (ni para el establo ni para el rescate de cereal). Sin `hero` en la lista, decide el tilde del panel |
 | `fiestas` / `fiestas chicas` | fiesta grande donde el ayuntamiento y los recursos lo permitan, si no chica |
 | `todas:` · `nada` · `#` | para todas las aldeas · esa aldea quieta · comentario |
 

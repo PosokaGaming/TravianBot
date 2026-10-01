@@ -1438,6 +1438,10 @@
   const miles = n => Math.round(n).toLocaleString('es-AR');
   const MARGEN = 1200;   // s
   let SYNC_RONDA = false;
+  /* la lista de esta vuelta: de acá sale en qué aldeas se usan los recursos del
+     héroe ("hero" / "no hero" en la lista; si no dice nada, el tilde del panel) */
+  let PLISTA = null;
+  const heroeOk = did => { const v = PLISTA ? TB_LISTA.heroeEn(PLISTA, did) : null; return v === null ? CFG.lista.heroe !== false : v; };
 
   /* GET/POST de una página del juego; corta todo si aparece el captcha o se cerró la sesión */
   async function traer(url, opciones) {
@@ -1697,7 +1701,7 @@
     return entrenarLista(did, gid, plan.porGid[gid], {
       cola: cola(gid), H,
       // sin leer las colas no sé cuánto falta: ni héroe ni NPC
-      heroe: modo === 'caballos' && !!colas && CFG.lista.heroe !== false && !reserva,
+      heroe: modo === 'caballos' && !!colas && heroeOk(did) && !reserva,
       npc: !!colas && !reserva,
       reserva,
     });
@@ -1848,6 +1852,11 @@
       else delete ctx.espera[did];
       return { txt: tt, pendientes: true, reserva };
     };
+    // "hero" en la línea de la aldea: lo que falta para la obra sale del héroe (antes que el NPC)
+    if (!cand && primera && TB_LISTA.heroeEn(PLISTA, did) === true) {
+      const r = await obraConHeroe(did, primera, ctx);
+      if (r) return cierre(notas.concat([r]).join(' · '), false);
+    }
     if (!cand && primera && CFG.lista.npc !== false) {
       const r = await obraConNPC(did, primera, ctx);
       if (r) return cierre(notas.concat([r]).join(' · '), false);
@@ -1876,6 +1885,52 @@
     const hecho = cand.nuevo ? '🏗 ' + cand.nombre + ' (nueva, casilla ' + cand.aid + ')' : '⬆ ' + cand.nombre + ' ' + cand.nivel + '→' + (cand.nivel + 1);
     log((cand.nuevo ? '🏗 ' + nombreDe(did) + ': construyo ' + cand.nombre + ' en la casilla ' + cand.aid : '⬆ ' + nombreDe(did) + ': ' + cand.nombre + ' ' + cand.nivel + '→' + (cand.nivel + 1)) + (ok ? ' ✔' : ' (pedido, no lo veo en la cola)'));
     return cierre(notas.concat([hecho + (ok ? ' ✔' : '')]).join(' · '), false);
+  }
+
+  /* obra con los recursos del héroe (pedido del 30/09, otra cuenta: "Don't use
+     Hero resources except of 15 and 16"): sólo en aldeas con "hero" en su
+     línea. Si a la obra le faltan recursos y el héroe tiene TODO lo que falta,
+     se lo pasa y la pide; si no le alcanza, espera la producción (no pasa de a
+     poco). Si el juego no deja usar el inventario (héroe muerto o afuera),
+     no lo reintenta por 15 min. */
+  async function obraConHeroe(did, c, ctx) {
+    if (ahora() - num(ss.get('tb_lheroe_ko')) < 900000) return null;
+    const url = c.campo ? urlSlot(did, c.id) : urlEdificio(did, c.aid, c.gid);
+    await dormir(azar(300, 700));
+    const b = await traer(url);
+    if (didDe(b) !== did) return null;
+    const up = $('.upgradeBuilding', b) || $('#build', b) || b;
+    if (!RX_FALTA_REC.test(txt($('.errorMessage', up)))) return null;   // obrero ocupado u otra cosa
+    const costo = costoDe(up);
+    const st = leerStock(b);
+    if (!suma(costo) || !st.capW || !st.capG) return null;
+    const cap = i => i === 3 ? st.capG : st.capW;
+    if (costo.some((x, i) => x > cap(i))) return null;   // hace falta un depósito más grande
+    let inv;
+    try { inv = await inventarioHeroe(); } catch (e) { return null; }
+    const falta = costo.map((x, i) => Math.max(0, x - st.cur[i]));
+    // el juego no pasa menos de 100: se redondea para arriba, sin pasarse del depósito
+    const pasar = falta.map((f, i) => f > 0 ? Math.min(Math.max(f, 100), inv[i + 1] ? inv[i + 1].n : 0, cap(i) - st.cur[i]) : 0);
+    if (pasar.some((p, i) => p < falta[i])) return null;   // al héroe no le alcanza
+    const dado = await heroeARecursos(did, pasar, inv);
+    const dadoTxt = dado.map((v, i) => v ? miles(v) + ' ' + RECURSO[i + 1] : '').filter(Boolean).join(', ');
+    if (dado.some((v, i) => v < falta[i])) {
+      if (!dadoTxt) { ss.set('tb_lheroe_ko', String(ahora())); return null; }
+      log('héroe → ' + nombreDe(did) + ': ' + dadoTxt + ', no alcanzó para ' + c.nombre);
+      return '🦸 héroe: ' + dadoTxt + ' (no alcanzó para ' + c.nombre + ')';
+    }
+    log('héroe → ' + nombreDe(did) + ': ' + dadoTxt + ' para ' + c.nombre + ' ' + c.nivel + '→' + (c.nivel + 1));
+    await dormir(azar(500, 1000));
+    const b2 = await traer(url);
+    const boton = botonMejorar(b2);
+    const destino = boton && !botonApagado(boton) ? urlDelBoton(boton) : '';
+    if (!destino) return '🦸 héroe: ' + dadoTxt + ', pero ' + c.nombre + ' sigue sin botón';
+    await dormir(azar(500, 1100));
+    const rr = await traer(new URL(destino, location.origin + '/').href);
+    anotarPedido(ctx, did, c);
+    const ok = $$('.buildingList li', rr).some(li => normNombre(txt(li)).indexOf(normNombre(c.en || '')) >= 0);
+    log('⬆ ' + nombreDe(did) + ': ' + c.nombre + ' ' + c.nivel + '→' + (c.nivel + 1) + ' con recursos del héroe' + (ok ? ' ✔' : ' (pedido, no lo veo en la cola)'));
+    return '🦸 ⬆ ' + c.nombre + ' ' + c.nivel + '→' + (c.nivel + 1) + ' con el héroe (' + dadoTxt + ')' + (ok ? ' ✔' : '');
   }
 
   /* NPC para una obra: sólo si el obrero está libre, faltan ≥1 h para tener
@@ -1959,7 +2014,7 @@
     const objetivo = Math.floor(st.capG * RESCATE_OBJETIVO / 100);
     if (st.cur[3] >= objetivo) return null;
     const partes = [];
-    const usarHeroe = CFG.lista.heroe !== false;
+    const usarHeroe = heroeOk(did);
     let inv = null;
     if (usarHeroe) { try { inv = await inventarioHeroe(); } catch (e) {} }
     // 1 · el cereal del héroe
@@ -2087,6 +2142,7 @@
   async function pasoLista(info) {
     const c = CFG.lista || {};
     const P = TB_LISTA.parsear(c.texto || '', info.aldeas || []);
+    PLISTA = P;
     const dids = (info.aldeas || []).map(a => String(a.did)).filter(d => P.porAldea[d] && P.porAldea[d].ordenes.length);
     if (!dids.length) {
       if (ss.get('tb_lvacia') !== '1') { ss.set('tb_lvacia', '1'); log('TO DO: la lista está vacía — escribila en el panel'); }

@@ -108,6 +108,11 @@ var TB_LISTA = (function () {
   // "fiestas chicas", "small parties", "parties small": el tamaño puede ir antes o después
   const RX_FIESTA = /^((?:chicas?|pequenas?|small|little)\s+)?(fiestas?|parties|party|celebraciones?|celebrations?|keep parties going)\b(.*)$/;
   const RX_HOSP = /^(curar( el)? hospital|clear hospital|vaciar( el)? hospital|curar heridos|curar|heal|hospital)$/;
+  /* recursos del héroe por aldea (pedido del 30/09, otra cuenta: "Don't use Hero
+     resources except of 15 and 16"): "hero" = esta aldea los usa (también para
+     obras); "no hero" = nunca. Ver heroeEn(). */
+  const RX_HEROE = /^(?:(?:use|usar)\s+)?(?:the\s+)?(?:hero|heroe)(?:\s+(?:resources?|ressources?|recursos|res))?$|^(?:usar\s+)?(?:los\s+)?recursos del heroe$/;
+  const RX_HEROE_NO = /^(?:no|sin|without|dont use|do not use|never|nunca)\s+(?:the\s+|los\s+)?(?:hero|heroe|recursos del heroe)(?:\s+(?:resources?|ressources?|recursos|res))?$/;
 
   /* PRIORIDAD (pedido del 30/09: "prioridad en 01 plaza de torneos hasta 10"):
      "!Tournament Square 10", "prioridad Tournament Square 10" o "… 10 primero".
@@ -133,6 +138,8 @@ var TB_LISTA = (function () {
     if (f) return { tipo: 'fiestas', grande: !f[1] && !/\b(chicas?|pequenas?|small|little)\b/.test(f[3]), txt: texto.trim() };
     if (RX_HOSP.test(t)) return { tipo: 'hospital', txt: texto.trim() };
     if (/^nada$|^nothing$/.test(t)) return { tipo: 'nada', txt: texto.trim() };
+    if (RX_HEROE_NO.test(t)) return { tipo: 'heroe', si: false, txt: texto.trim() };
+    if (RX_HEROE.test(t)) return { tipo: 'heroe', si: true, txt: texto.trim() };
 
     const esTropa = PAL_TROPAS.test(t);
     if (!esTropa) {
@@ -181,7 +188,7 @@ var TB_LISTA = (function () {
   function parsear(texto, aldeas) {
     aldeas = aldeas || [];
     const porAldea = {}, errores = [];
-    let actuales = [];
+    let actuales = [], general = false;   // general = la línea es "todas:" (una línea de la aldea le gana)
     String(texto || '').split(/\r?\n/).forEach((cruda, i) => {
       const linea = cruda.replace(/(#|\/\/).*$/, '').trim();
       if (!linea) return;
@@ -203,6 +210,7 @@ var TB_LISTA = (function () {
         });
         if (malas.length) errores.push({ linea: i + 1, msg: 'no conozco la aldea "' + malas.join(', ') + '"' });
         actuales = dids;
+        general = /^(todas|todos|all|every)$/.test(norm(cab));
         resto = linea.slice(dp + 1);
       } else if (!actuales.length) {
         errores.push({ linea: i + 1, msg: 'falta la aldea al principio ("04T: …")' });
@@ -212,6 +220,7 @@ var TB_LISTA = (function () {
         const o = orden(pedazo);
         if (!o) return;
         if (o.error) { errores.push({ linea: i + 1, msg: o.error }); return; }
+        if (general) o.general = true;
         actuales.forEach(did => {
           const a = porAldea[did] = porAldea[did] || { ordenes: [] };
           a.ordenes.push(o);
@@ -236,6 +245,7 @@ var TB_LISTA = (function () {
     if (o.tipo === 'edificio') return (o.gid ? NOMBRE_ES[o.gid] : 'Muralla') + ' → ' + o.max;
     if (o.tipo === 'tropas') return 'tropas: ' + o.grupos.map(g => g.map(titulo).join(' / ')).join(' + ');
     if (o.tipo === 'hospital') return 'curar el hospital';
+    if (o.tipo === 'heroe') return o.si ? 'usa los recursos del héroe (también en obras)' : 'sin recursos del héroe';
     if (o.tipo === 'fiestas') return o.grande ? 'fiesta grande (si no se puede, chica)' : 'fiestas chicas';
     return o.tipo;
   }
@@ -276,5 +286,19 @@ var TB_LISTA = (function () {
     return { porGid, faltan };
   }
 
-  return { parsear, describir, planTropas, elegirDelGrupo, coincide, norm, NOMBRE_ES, GIDS_MURALLA };
+  /* ¿los recursos del héroe se usan en esta aldea? (pedido del 30/09)
+     · "hero" / "no hero" en la línea de la aldea mandan (le ganan a "todas:")
+     · si ALGUNA aldea tiene "hero", el héroe se usa SÓLO en esas
+     · true = sí, incluso para obras · false = nunca (ni el rescate de cereal)
+     · null = la lista no dice nada: decide el tilde del panel (establo y rescate) */
+  function heroeEn(P, did) {
+    const ords = ((P && P.porAldea[String(did)]) || { ordenes: [] }).ordenes.filter(o => o.tipo === 'heroe');
+    const propias = ords.filter(o => !o.general);
+    const manda = (propias.length ? propias : ords).slice(-1)[0];
+    if (manda) return manda.si;
+    const hayBlanca = !!P && Object.keys(P.porAldea).some(d => P.porAldea[d].ordenes.some(o => o.tipo === 'heroe' && o.si));
+    return hayBlanca ? false : null;
+  }
+
+  return { parsear, describir, planTropas, elegirDelGrupo, coincide, norm, heroeEn, NOMBRE_ES, GIDS_MURALLA };
 })();
