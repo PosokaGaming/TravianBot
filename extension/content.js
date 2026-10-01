@@ -1416,7 +1416,7 @@
   }
   /* la página es de OTRA cuenta (30/09: alguien entró con otra cuenta del mismo
      servidor en este perfil): el bot no hace nada y vuelve a mirar en 1 min */
-  let OTRA_CUENTA = false, CAMBIO_CUENTA = false;
+  let OTRA_CUENTA = false, CAMBIO_CUENTA = false, ESPERA_OTRA = false;
   async function sincronizarAldeas(raiz) {
     const nuevas = aldeasDelRecuadro(raiz);
     if (!nuevas.length || !INFO) return;
@@ -2438,9 +2438,8 @@
       await fiestasLista(P, ctx);
     } catch (e) {
       if (e && e.parar) { cancelarRecarga(); await bg({ tipo: 'alarma', m: e.parar }); marcar('⛔ ' + e.message, false, 0); return; }
-      if (e && e.otraCuenta) {   // no hace nada con la sesión de otra cuenta: vuelve a mirar en 1 min
-        const ms = await programarEn(ahora() + 60000);
-        estado({ txt: '⏸ la sesión es de otra cuenta: espero', next: ahora() + ms });
+      if (e && e.otraCuenta) {   // otra cuenta (o recién cambiada): lo resuelve el próximo tick, sin reprogramar
+        estado({ txt: CAMBIO_CUENTA ? '🔁 cambié de cuenta' : '⏸ la sesión es de otra cuenta: espero' });
         return;
       }
       log('TO DO: ' + (e && e.message ? e.message : e));
@@ -2521,17 +2520,26 @@
     // las aldeas salen del recuadro de la derecha: nuevas entran, perdidas salen
     if (!aldeasMiradas) { aldeasMiradas = true; try { await sincronizarAldeas(document); } catch (e) {} }
     // sesión de OTRA cuenta: ni tropas, ni obras, ni héroe (salvo que el usuario esté escaneando para cambiar de cuenta)
-    if (CAMBIO_CUENTA) {   // perfil de otra cuenta recién cargado: empiezo de nuevo con sus ajustes
+    /* perfil de otra cuenta recién cargado: el próximo tick (2 s) ya trae sus
+       ajustes del service worker y vuelve a mirar las aldeas. (5.8.0 reprogramaba
+       la espera en cada tick: el meta refresh no llegaba nunca y quedaba trabado.) */
+    if (CAMBIO_CUENTA) {
+      CAMBIO_CUENTA = false; aldeasMiradas = false; NEXT = 0;
       if (!bannerEl) crearBanner();
-      const ms = await programarEn(ahora() + 8000);
-      estado({ txt: '🔁 cambié de cuenta', next: ahora() + ms });
+      estado({ txt: '🔁 cambié de cuenta' });
       return;
     }
+    /* sesión de una cuenta que no es la del bot: no hace nada y recarga UNA vez
+       por minuto (programado una sola vez) para ver si volvió la de siempre */
     if (OTRA_CUENTA && !(info.scan && info.scan.activo)) {
-      if (!bannerEl) crearBanner();
-      const ms = await programarEn(ahora() + 60000);
-      estado({ txt: '⏸ la sesión es de otra cuenta: espero', next: ahora() + ms });
-      marcar('⏸ otra cuenta', true, ahora() + ms);
+      if (!ESPERA_OTRA) {
+        ESPERA_OTRA = true;
+        if (!bannerEl) crearBanner();
+        cancelarRecarga();
+        recargarEn(60);
+        estado({ txt: '⏸ la sesión es de otra cuenta: espero', next: ahora() + 60000 });
+        marcar('⏸ otra cuenta', true, ahora() + 60000);
+      }
       return;
     }
 

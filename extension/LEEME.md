@@ -180,6 +180,12 @@ mensaje entre pestaña y service worker puede tardar 5-40 s. Por eso cada paso
 guarda su avance ANTES de apretar un botón que recarga la página, y el service
 worker guarda todo en memoria (no lee el disco en cada consulta).
 
+## Cambios v5.8.1 (30/09/2026, 22:35)
+
+Al cambiar de cuenta, la pestaña reprogramaba su espera de 8 s en cada tick (el bucle corre 4 s antes
+del NEXT) y el meta refresh no llegaba nunca: quedó trabada en "🔁 cambié de cuenta". Ahora el cambio se
+resuelve en el tick siguiente sin recargar, y con una cuenta desconocida recarga UNA vez por minuto.
+
 ## Cambios v5.8 (30/09/2026) — otra cuenta: abastecer, NPC exacto y perfiles
 
 - `supply 2`: granero de esta aldea ≥95 % → NPC ⅓/⅓/⅓ → manda a 2 lo que le falta (API del juego
