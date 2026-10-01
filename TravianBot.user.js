@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TravianBot
 // @namespace    https://github.com/PosokaGaming/TravianBot
-// @version      5.10.5
+// @version      5.11.0
 // @description  Bot para Travian Legends: TO DO LIST por aldea, farm list, tropas por prioridad de cola, héroe y construcción, con modos. Una sola pestaña.
 // @author       TravianBot
 // @match        *://*.travian.com/*
@@ -223,6 +223,8 @@ var TB_LISTA = (function () {
     if (/^nada$|^nothing$/.test(t)) return { tipo: 'nada', txt: texto.trim() };
     // "sin parar" (pedido del 30/09: "que construya en las dos últimas aldeas sin parar")
     if (/^(sin parar|nonstop|non stop|no parar|continuo|rapido|rapida|fast)$/.test(t)) return { tipo: 'rapido', txt: texto.trim() };
+    // "oro" (pedido del 01/10: "una vez tenga 2 cereales haciéndose usa ORO para hacerse inmediatamente")
+    if (/^(oro|gold|terminar con oro|completar con oro|instant|instantaneo|finish with gold|finish now)$/.test(t)) return { tipo: 'oro', txt: texto.trim() };
     if (RX_HEROE_NO.test(t)) return { tipo: 'heroe', si: false, txt: texto.trim() };
     if (RX_HEROE.test(t)) return { tipo: 'heroe', si: true, txt: texto.trim() };
     const ab = t.match(RX_ABASTECER);
@@ -343,6 +345,7 @@ var TB_LISTA = (function () {
     if (o.tipo === 'edificio') return (o.gid ? NOMBRE_ES[o.gid] : 'Muralla') + ' → ' + o.max;
     if (o.tipo === 'tropas') return 'tropas: ' + o.grupos.map(g => g.map(titulo).join(' / ')).join(' + ');
     if (o.tipo === 'hospital') return 'curar el hospital';
+    if (o.tipo === 'oro') return 'con 2 obras en marcha, las termina con oro (2 oro)';
     if (o.tipo === 'rapido') return 'sin parar: llena la cola de obras y la vuelve a mirar apenas se libera';
     if (o.tipo === 'heroe') return o.si ?'usa los recursos del héroe (también en obras)' : 'sin recursos del héroe';
     if (o.tipo === 'fiestas') return o.grande ? 'fiesta grande (si no se puede, chica)' : 'fiestas chicas';
@@ -1058,7 +1061,7 @@ function cuerpoLista(cfg, aldeas) {
       `<b>tropas Mercenary + Marksman</b> · entrenar sin parar · <b>Marauder/Steppe Rider</b> = la primera que esté investigada<br>` +
       `<b>hospital</b> · curar a los heridos · <b>fiestas</b> · grande si se puede, si no chica · <b>fiestas chicas</b><br>` +
       `<b>hero</b> · esta aldea usa los recursos del héroe, también en obras (si alguna aldea lo tiene, las demás no los usan) · <b>no hero</b> · nunca<br>` +
-      `<b>1 crop 18</b> · UN solo campo (el más alto) · <b>… npc</b> · NPC al costo exacto cuando el total alcanza · <b>supply 2</b> · granero al 95 % → NPC ⅓ → manda a 2 lo que le falta<br>` +
+      `<b>1 crop 18</b> · UN solo campo (el más alto) · <b>… npc</b> · NPC al costo exacto cuando el total alcanza · <b>supply 2</b> · le manda a 2 lo que le falta (con el granero al 95 %, además NPC ⅓) · <b>oro</b> · con 2 obras en marcha, las termina con oro<br>` +
       `<b>todas:</b> para todas las aldeas · <b>nada</b> · esa aldea quieta · <b>#</b> comentario` +
     `</div></details>` +
     `<label>caballos primero: el establo recibe los recursos hasta <input type="number" min="1" max="24" data-cfg="lista.caballosHoras" value="${c.caballosHoras || 2}" style="width:44px"> h de cola</label>` +
@@ -3232,6 +3235,14 @@ setInterval(tictac, 250);
     // "sin parar": cuándo termina la primera obra de la cola (s), para volver a mirar justo ahí
     const libreEn = Math.min.apply(null, [99999].concat($$('.buildingList .timer', d1 || d2).map(x => num(x.getAttribute('value')) || segDe(txt(x))).filter(v => v > 0)));
     const rapida = !!(ctx.rapidas && ctx.rapidas.has(did));
+    // "oro": con 2 obras en marcha, terminarlas ya con oro (la cola queda libre para las siguientes)
+    if (enObra >= 2 && ordenes.some(o => o.tipo === 'oro')) {
+      const ro = await terminarConOro(did);
+      if (ro) {
+        ctx.espera[did] = { t: ahora() + 5000, txt: ro };
+        return { txt: ro, pendientes: true };
+      }
+    }
     let pendientes = 0, cand = null, primera = null, primeraO = null, prioX = null;
     const notas = [];
     const vacias = slots.filter(CASILLA_LIBRE);
@@ -3329,6 +3340,35 @@ setInterval(tictac, 250);
     const hecho = cand.nuevo ? '🏗 ' + cand.nombre + ' (nueva, casilla ' + cand.aid + ')' : '⬆ ' + cand.nombre + ' ' + cand.nivel + '→' + (cand.nivel + 1);
     log((cand.nuevo ? '🏗 ' + nombreDe(did) + ': construyo ' + cand.nombre + ' en la casilla ' + cand.aid : '⬆ ' + nombreDe(did) + ': ' + cand.nombre + ' ' + cand.nivel + '→' + (cand.nivel + 1)) + (ok ? ' ✔' : ' (pedido, no lo veo en la cola)'));
     return cierre(notas.concat([hecho + (ok ? ' ✔' : '')]).join(' · '), false);
+  }
+
+  /* "oro" (01/10): termina YA todas las obras de la aldea con oro. API del juego (crypt.js,
+     Travian.Game.PremiumFeature.InstantCompletion): PUT + POST /api/v1/premium/instant-completion
+     { action: 'premiumFeature' } con x-nonce, igual que el NPC; actúa sobre la aldea ACTIVA y el
+     PUT devuelve el diálogo ("Use 2" = 2 oro; botón "disabled" si no hay nada que terminar). */
+  async function terminarConOro(did) {
+    const clave = 'tb_loro_' + did;
+    if (ahora() - num(ss.get(clave)) < 180000) return null;   // como mucho una vez cada 3 min por aldea
+    const d = await traer(urlDorf1(did));   // la aldea activa tiene que ser ésta
+    if (didDe(d) !== did) return '💰 no pude entrar para terminar con oro';
+    const url = location.origin + '/api/v1/premium/instant-completion';
+    const body = JSON.stringify({ action: 'premiumFeature' });
+    const r1 = await fetch(url, { method: 'PUT', credentials: 'include', headers: API_JSON, body });
+    const nonce = r1.headers.get('x-nonce');
+    const t1 = await r1.text();
+    if (!r1.ok || !nonce) { log('💰 ' + nombreDe(did) + ': el juego no dejó terminar con oro (HTTP ' + r1.status + ' ' + t1.slice(0, 100) + ')'); return null; }
+    let html = '';
+    try { html = JSON.parse(t1).html || ''; } catch (e) {}
+    if (/gold disabled/.test(html)) return null;   // no hay nada que terminar (o no alcanza el oro)
+    const precio = num((html.match(/Use\s*(\d+)/) || [])[1]);
+    if (precio > 10) { log('💰 ' + nombreDe(did) + ': terminar con oro cuesta ' + precio + ' oro, no lo hago (tope 10)'); ss.set(clave, String(ahora())); return null; }
+    await dormir(azar(400, 900));
+    const r2 = await fetch(url, { method: 'POST', credentials: 'include', headers: Object.assign({ 'X-Nonce': nonce }, API_JSON), body });
+    const t2 = await r2.text();
+    ss.set(clave, String(ahora()));
+    if (!r2.ok || /"error"/.test(t2)) { log('💰 ' + nombreDe(did) + ': terminar con oro falló (HTTP ' + r2.status + ' ' + t2.slice(0, 100) + ')'); return null; }
+    log('💰 ' + nombreDe(did) + ': terminé con oro las obras en marcha' + (precio ? ' (' + precio + ' oro)' : ''));
+    return '💰 obras terminadas con oro' + (precio ? ' (' + precio + ' oro)' : '');
   }
 
   /* pide la obra (botón verde de su página) y confirma que entró en la cola */
@@ -3487,15 +3527,17 @@ setInterval(tictac, 250);
     let st = leerStock(d);
     if (!st.capG || !st.capW) return '🚚 no leo el depósito';
     const pct = Math.floor(st.cur[3] * 100 / st.capG);
-    if (pct < o.granero) return '🌾 granero ' + pct + ' % (NPC y envío a ' + aQuien + ' desde ' + o.granero + ' %)';
-    const partes = [];
+    /* (01/10 05:35, pedido: "siempre que a la 2 le falte") el NPC sale sólo con el granero al 95 %,
+       pero el envío de lo que le falta al destino sale en CADA vuelta */
+    const partes = ['🌾 granero ' + pct + ' %'];
     // 2 · NPC: ⅓ madera, ⅓ barro, ⅓ hierro (lo que no entre en el almacén queda como cereal)
     const clave = 'tb_lnpca_' + did;
     /* si el almacén ya no tiene lugar para convertir el cereal, el NPC no sirve y gasta oro igual
        (01/10 03:55: después del primero, madera/barro/hierro quedaron en 800.000 = tope y el cereal
        siguió arriba del 95 %: cada 10 min habría hecho otro NPC de 3 oro que no cambiaba nada) */
     const lugarAlmacen = [0, 1, 2].reduce((acc, i) => acc + Math.max(0, st.capW - st.cur[i]), 0);
-    if (lugarAlmacen < st.capG * 0.05) partes.push('💱 NPC no: el almacén está lleno (no hay dónde convertir el cereal)');
+    if (pct < o.granero) { /* el NPC, recién desde el umbral del granero */ }
+    else if (lugarAlmacen < st.capG * 0.05) partes.push('💱 NPC no: el almacén está lleno (no hay dónde convertir el cereal)');
     else if (ahora() - num(ss.get(clave)) >= 600000 && await npcPermitido(true)) {
       const total = suma(st.cur) - 60;
       const a = Math.max(0, Math.min(st.capW, Math.floor(total / 3)));

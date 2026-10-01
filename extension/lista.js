@@ -160,6 +160,8 @@ var TB_LISTA = (function () {
     if (/^nada$|^nothing$/.test(t)) return { tipo: 'nada', txt: texto.trim() };
     // "sin parar" (pedido del 30/09: "que construya en las dos últimas aldeas sin parar")
     if (/^(sin parar|nonstop|non stop|no parar|continuo|rapido|rapida|fast)$/.test(t)) return { tipo: 'rapido', txt: texto.trim() };
+    // "oro" (pedido del 01/10: "una vez tenga 2 cereales haciéndose usa ORO para hacerse inmediatamente")
+    if (/^(oro|gold|terminar con oro|completar con oro|instant|instantaneo|finish with gold|finish now)$/.test(t)) return { tipo: 'oro', txt: texto.trim() };
     if (RX_HEROE_NO.test(t)) return { tipo: 'heroe', si: false, txt: texto.trim() };
     if (RX_HEROE.test(t)) return { tipo: 'heroe', si: true, txt: texto.trim() };
     const ab = t.match(RX_ABASTECER);
@@ -280,6 +282,7 @@ var TB_LISTA = (function () {
     if (o.tipo === 'edificio') return (o.gid ? NOMBRE_ES[o.gid] : 'Muralla') + ' → ' + o.max;
     if (o.tipo === 'tropas') return 'tropas: ' + o.grupos.map(g => g.map(titulo).join(' / ')).join(' + ');
     if (o.tipo === 'hospital') return 'curar el hospital';
+    if (o.tipo === 'oro') return 'con 2 obras en marcha, las termina con oro (2 oro)';
     if (o.tipo === 'rapido') return 'sin parar: llena la cola de obras y la vuelve a mirar apenas se libera';
     if (o.tipo === 'heroe') return o.si ?'usa los recursos del héroe (también en obras)' : 'sin recursos del héroe';
     if (o.tipo === 'fiestas') return o.grande ? 'fiesta grande (si no se puede, chica)' : 'fiestas chicas';

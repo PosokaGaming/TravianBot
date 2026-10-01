@@ -85,8 +85,9 @@ todas: fiestas                      # grande si se puede, si no chica
 | `hospital` | cura a los heridos con lo que alcance |
 | `1 crop 18` · `un cereal 18` | UN solo campo (el de nivel más alto) hasta ese nivel |
 | `… npc` (ej. `1 crop 18 npc`) | cuando el TOTAL de la aldea alcanza el costo, NPC al costo exacto y la sube (no usa el tope diario; 1 NPC cada 10 min como mucho) |
-| `supply 2` · `abastecer 2` (`supply 2 at 90`) | cuando el granero de ESTA aldea llega al 95 %: NPC a ⅓ madera, ⅓ barro, ⅓ hierro y le manda a 2, con comerciantes, sólo lo que le falta para su próxima obra (sin desbordar su depósito, tope 480.000) |
+| `supply 2` · `abastecer 2` (`supply 2 at 90`) | en cada vuelta le manda a 2, con comerciantes, sólo lo que le falta para su próxima obra (sin desbordar su depósito, tope 480.000); cuando el granero de ESTA aldea llega al 95 %, además NPC a ⅓ madera, ⅓ barro, ⅓ hierro |
 | `sin parar` (`nonstop`) | la aldea llena su cola de obras (hasta 3 pedidos seguidos) y, entre vuelta y vuelta, se vuelve a mirar apenas se libera el obrero (o cada 30 s si le faltan recursos) |
+| `oro` | cuando la aldea tiene 2 obras en marcha, las termina YA con oro (`premium/instant-completion`, 2 oro; como mucho 1 vez cada 3 min por aldea y nunca si cuesta más de 10) |
 | `hero` · `no hero` | esa aldea usa los recursos del héroe, **también para obras** (si a la obra le falta y el héroe tiene todo lo que falta) · nunca. Si alguna aldea tiene `hero`, las demás no los usan (ni para el establo ni para el rescate de cereal). Sin `hero` en la lista, decide el tilde del panel |
 | `fiestas` / `fiestas chicas` | fiesta grande donde el ayuntamiento y los recursos lo permitan, si no chica |
 | `todas:` · `nada` · `#` | para todas las aldeas · esa aldea quieta · comentario |
@@ -180,6 +181,15 @@ pestañas de fondo y el service worker con prioridad *Idle* / modo eficiencia
 mensaje entre pestaña y service worker puede tardar 5-40 s. Por eso cada paso
 guarda su avance ANTES de apretar un botón que recarga la página, y el service
 worker guarda todo en memoria (no lee el disco en cada consulta).
+
+## Cambios v5.11.0 (01/10/2026, 08:20) — envío siempre y `oro`
+
+Pedido: "todos los cereales a 18 y luego a 19, sin detenerse; la 10 le envía recursos; una vez tenga 2
+cereales haciéndose usa ORO para hacerse inmediatamente" + "siempre que a la 2 le falte".
+- `supply`: el envío sale en CADA vuelta (lo que le falta al destino); el NPC sigue sólo desde el 95 %.
+- `oro`: con 2 obras en marcha, PUT+POST `/api/v1/premium/instant-completion` {action:'premiumFeature'}
+  (crypt.js: `PremiumFeature.InstantCompletion`); actúa sobre la aldea ACTIVA, el PUT devuelve el diálogo
+  ("Use 2"; botón `gold disabled` si no hay nada). Verificado el PUT en vivo sin confirmar (no gasta).
 
 ## Cambios v5.10.5 (01/10/2026, 05:35) — no pelear con el jugador
 

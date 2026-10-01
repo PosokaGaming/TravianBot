@@ -1848,6 +1848,14 @@
     // "sin parar": cuándo termina la primera obra de la cola (s), para volver a mirar justo ahí
     const libreEn = Math.min.apply(null, [99999].concat($$('.buildingList .timer', d1 || d2).map(x => num(x.getAttribute('value')) || segDe(txt(x))).filter(v => v > 0)));
     const rapida = !!(ctx.rapidas && ctx.rapidas.has(did));
+    // "oro": con 2 obras en marcha, terminarlas ya con oro (la cola queda libre para las siguientes)
+    if (enObra >= 2 && ordenes.some(o => o.tipo === 'oro')) {
+      const ro = await terminarConOro(did);
+      if (ro) {
+        ctx.espera[did] = { t: ahora() + 5000, txt: ro };
+        return { txt: ro, pendientes: true };
+      }
+    }
     let pendientes = 0, cand = null, primera = null, primeraO = null, prioX = null;
     const notas = [];
     const vacias = slots.filter(CASILLA_LIBRE);
@@ -1945,6 +1953,35 @@
     const hecho = cand.nuevo ? '🏗 ' + cand.nombre + ' (nueva, casilla ' + cand.aid + ')' : '⬆ ' + cand.nombre + ' ' + cand.nivel + '→' + (cand.nivel + 1);
     log((cand.nuevo ? '🏗 ' + nombreDe(did) + ': construyo ' + cand.nombre + ' en la casilla ' + cand.aid : '⬆ ' + nombreDe(did) + ': ' + cand.nombre + ' ' + cand.nivel + '→' + (cand.nivel + 1)) + (ok ? ' ✔' : ' (pedido, no lo veo en la cola)'));
     return cierre(notas.concat([hecho + (ok ? ' ✔' : '')]).join(' · '), false);
+  }
+
+  /* "oro" (01/10): termina YA todas las obras de la aldea con oro. API del juego (crypt.js,
+     Travian.Game.PremiumFeature.InstantCompletion): PUT + POST /api/v1/premium/instant-completion
+     { action: 'premiumFeature' } con x-nonce, igual que el NPC; actúa sobre la aldea ACTIVA y el
+     PUT devuelve el diálogo ("Use 2" = 2 oro; botón "disabled" si no hay nada que terminar). */
+  async function terminarConOro(did) {
+    const clave = 'tb_loro_' + did;
+    if (ahora() - num(ss.get(clave)) < 180000) return null;   // como mucho una vez cada 3 min por aldea
+    const d = await traer(urlDorf1(did));   // la aldea activa tiene que ser ésta
+    if (didDe(d) !== did) return '💰 no pude entrar para terminar con oro';
+    const url = location.origin + '/api/v1/premium/instant-completion';
+    const body = JSON.stringify({ action: 'premiumFeature' });
+    const r1 = await fetch(url, { method: 'PUT', credentials: 'include', headers: API_JSON, body });
+    const nonce = r1.headers.get('x-nonce');
+    const t1 = await r1.text();
+    if (!r1.ok || !nonce) { log('💰 ' + nombreDe(did) + ': el juego no dejó terminar con oro (HTTP ' + r1.status + ' ' + t1.slice(0, 100) + ')'); return null; }
+    let html = '';
+    try { html = JSON.parse(t1).html || ''; } catch (e) {}
+    if (/gold disabled/.test(html)) return null;   // no hay nada que terminar (o no alcanza el oro)
+    const precio = num((html.match(/Use\s*(\d+)/) || [])[1]);
+    if (precio > 10) { log('💰 ' + nombreDe(did) + ': terminar con oro cuesta ' + precio + ' oro, no lo hago (tope 10)'); ss.set(clave, String(ahora())); return null; }
+    await dormir(azar(400, 900));
+    const r2 = await fetch(url, { method: 'POST', credentials: 'include', headers: Object.assign({ 'X-Nonce': nonce }, API_JSON), body });
+    const t2 = await r2.text();
+    ss.set(clave, String(ahora()));
+    if (!r2.ok || /"error"/.test(t2)) { log('💰 ' + nombreDe(did) + ': terminar con oro falló (HTTP ' + r2.status + ' ' + t2.slice(0, 100) + ')'); return null; }
+    log('💰 ' + nombreDe(did) + ': terminé con oro las obras en marcha' + (precio ? ' (' + precio + ' oro)' : ''));
+    return '💰 obras terminadas con oro' + (precio ? ' (' + precio + ' oro)' : '');
   }
 
   /* pide la obra (botón verde de su página) y confirma que entró en la cola */
@@ -2103,15 +2140,17 @@
     let st = leerStock(d);
     if (!st.capG || !st.capW) return '🚚 no leo el depósito';
     const pct = Math.floor(st.cur[3] * 100 / st.capG);
-    if (pct < o.granero) return '🌾 granero ' + pct + ' % (NPC y envío a ' + aQuien + ' desde ' + o.granero + ' %)';
-    const partes = [];
+    /* (01/10 05:35, pedido: "siempre que a la 2 le falte") el NPC sale sólo con el granero al 95 %,
+       pero el envío de lo que le falta al destino sale en CADA vuelta */
+    const partes = ['🌾 granero ' + pct + ' %'];
     // 2 · NPC: ⅓ madera, ⅓ barro, ⅓ hierro (lo que no entre en el almacén queda como cereal)
     const clave = 'tb_lnpca_' + did;
     /* si el almacén ya no tiene lugar para convertir el cereal, el NPC no sirve y gasta oro igual
        (01/10 03:55: después del primero, madera/barro/hierro quedaron en 800.000 = tope y el cereal
        siguió arriba del 95 %: cada 10 min habría hecho otro NPC de 3 oro que no cambiaba nada) */
     const lugarAlmacen = [0, 1, 2].reduce((acc, i) => acc + Math.max(0, st.capW - st.cur[i]), 0);
-    if (lugarAlmacen < st.capG * 0.05) partes.push('💱 NPC no: el almacén está lleno (no hay dónde convertir el cereal)');
+    if (pct < o.granero) { /* el NPC, recién desde el umbral del granero */ }
+    else if (lugarAlmacen < st.capG * 0.05) partes.push('💱 NPC no: el almacén está lleno (no hay dónde convertir el cereal)');
     else if (ahora() - num(ss.get(clave)) >= 600000 && await npcPermitido(true)) {
       const total = suma(st.cur) - 60;
       const a = Math.max(0, Math.min(st.capW, Math.floor(total / 3)));
