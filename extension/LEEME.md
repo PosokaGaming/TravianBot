@@ -182,6 +182,13 @@ mensaje entre pestaña y service worker puede tardar 5-40 s. Por eso cada paso
 guarda su avance ANTES de apretar un botón que recarga la página, y el service
 worker guarda todo en memoria (no lee el disco en cada consulta).
 
+## Cambios v5.11.1 (01/10/2026, 11:25) — farm list por GraphQL
+
+La farm list leía las listas de `build.php?gid=16&tt=99`, que depende de la aldea ACTIVA; con el TO DO
+trabajando sólo en la 13 (sin plaza de reuniones) la página no traía las listas y no salió casi nada entre
+08:31 y 11:20. Ahora las lee de GraphQL (`ownPlayer{accessRights villages farmLists{id name slotsStates:
+slots{id isActive}}}`), que no depende de la aldea; la página queda de respaldo.
+
 ## Cambios v5.11.0 (01/10/2026, 08:20) — envío siempre y `oro`
 
 Pedido: "todos los cereales a 18 y luego a 19, sin detenerse; la 10 le envía recursos; una vez tenga 2

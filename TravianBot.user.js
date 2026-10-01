@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TravianBot
 // @namespace    https://github.com/PosokaGaming/TravianBot
-// @version      5.11.0
+// @version      5.11.1
 // @description  Bot para Travian Legends: TO DO LIST por aldea, farm list, tropas por prioridad de cola, héroe y construcción, con modos. Una sola pestaña.
 // @author       TravianBot
 // @match        *://*.travian.com/*

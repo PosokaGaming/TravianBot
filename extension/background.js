@@ -401,26 +401,48 @@ async function farmPorApi() {
     await set('tb_lease_farm', t0 + 120000);
     await set('tb_estado_farm', { t: t0, txt: 'enviando…' });
 
-    const r = await fetch(origen + '/build.php?gid=16&tt=99', { credentials: 'include' });
-    const h = await r.text();
-    if (/id="botprotection"|class="botProtection"|name="botprotection"|id="bot_check"/i.test(h)) {
-      await set('tb_alarma', { t: Date.now(), m: 'Captcha / control antibot (farm list)' });
-      await parar('Captcha / control antibot (farm list)');
-      return;
+    /* las listas salen de GraphQL (01/10): la página de la plaza de reuniones depende de la aldea
+       ACTIVA, y con el TO DO trabajando sólo en la 13 (recién fundada, sin plaza) la página no traía
+       las listas: "no encuentro las listas en la página" toda la mañana. Si GraphQL falla, la página. */
+    let listas = null, permiso = true, enCuenta = null;
+    try {
+      const rg = await fetch(origen + '/api/v1/graphql', {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+        body: JSON.stringify({ query: 'query{ownPlayer{accessRights{sendRaids} villages{id} farmLists{id name slotsStates: slots{id isActive}}}}' }),
+      });
+      if (rg.ok) {
+        const j = await rg.json();
+        const op = j && j.data && j.data.ownPlayer;
+        if (op && Array.isArray(op.farmLists)) {
+          listas = op.farmLists;
+          permiso = !(op.accessRights && op.accessRights.sendRaids === false);
+          enCuenta = (op.villages || []).map(v => String(v.id));
+        }
+      }
+    } catch (e) {}
+    if (!listas) {
+      const r = await fetch(origen + '/build.php?gid=16&tt=99', { credentials: 'include' });
+      const h = await r.text();
+      if (/id="botprotection"|class="botProtection"|name="botprotection"|id="bot_check"/i.test(h)) {
+        await set('tb_alarma', { t: Date.now(), m: 'Captcha / control antibot (farm list)' });
+        await parar('Captcha / control antibot (farm list)');
+        return;
+      }
+      if (h.indexOf('villageInput') < 0 && h.indexOf('listEntry village') < 0) { await log('farm: la página no trae la sesión (HTTP ' + r.status + '), reintento', 'farm'); reintento = true; return; }
+      enCuenta = (h.match(/data-did="(\d+)"/g) || []).map(x => x.replace(/\D/g, ''));
+      const k = h.indexOf('viewData:');
+      const vd = k >= 0 ? objetoJSON(h, k) : null;
+      listas = vd && vd.ownPlayer && vd.ownPlayer.farmLists;
+      if (!Array.isArray(listas)) { await log('farm: no encuentro las listas (ni por GraphQL ni en la página), reintento', 'farm'); reintento = true; return; }
+      permiso = !(vd.ownPlayer.accessRights && vd.ownPlayer.accessRights.sendRaids === false);
     }
-    if (h.indexOf('villageInput') < 0 && h.indexOf('listEntry village') < 0) { await log('farm: la página no trae la sesión (HTTP ' + r.status + '), reintento', 'farm'); reintento = true; return; }
     // ¿la sesión es de la cuenta del bot? (si entraste con otra cuenta en este perfil, no le mando SUS listas)
     const cuenta = new Set(((await get('tb_cuenta', null)) || Object.keys((await get('tb_edificios', {})) || {})).map(String));
-    const enPagina = (h.match(/data-did="(\d+)"/g) || []).map(x => x.replace(/\D/g, ''));
-    if (cuenta.size && enPagina.length && !enPagina.some(d => cuenta.has(d))) {
+    if (cuenta.size && enCuenta && enCuenta.length && !enCuenta.some(d => cuenta.has(d))) {
       await set('tb_estado_farm', { t: Date.now(), txt: 'otra cuenta en la sesión: espero' });
       return;
     }
-    const k = h.indexOf('viewData:');
-    const vd = k >= 0 ? objetoJSON(h, k) : null;
-    const listas = vd && vd.ownPlayer && vd.ownPlayer.farmLists;
-    if (!Array.isArray(listas)) { await log('farm: no encuentro las listas en la página, reintento', 'farm'); reintento = true; return; }
-    if (vd.ownPlayer.accessRights && vd.ownPlayer.accessRights.sendRaids === false) { await log('farm: la cuenta no tiene permiso de mandar atracos', 'farm'); return; }
+    if (!permiso) { await log('farm: la cuenta no tiene permiso de mandar atracos', 'farm'); return; }
 
     let elegidas = listas.map(l => ({ id: l.id, nombre: l.name, targets: (l.slotsStates || []).filter(s => s.isActive).map(s => s.id) }))
                          .filter(l => l.targets.length);
