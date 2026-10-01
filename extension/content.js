@@ -189,7 +189,7 @@
      bucle de 2 s no vuelva a navegar antes de que la página termine de cargar
      (eso reiniciaba la carga y gastaba los intentos), y espero a que el log
      llegue al service worker antes de irme. */
-  function irA(url) {
+  function irA(url, sinPausa) {   // sinPausa: salir YA (p. ej. de una página que el juego recarga cada pocos segundos)
     NAVEGANDO = ahora();
     cancelarRecarga();
     /* freno de bucles: el 27/09 a las 04:55 la pestaña del héroe pidió
@@ -209,7 +209,7 @@
       return;
     }
     const ir = () => { location.href = url; };
-    const f = faltaPausa();
+    const f = sinPausa ? 0 : faltaPausa();
     // mientras espera la pausa, el bucle no vuelve a actuar (NAVEGANDO cuenta desde que se va)
     NAVEGANDO = ahora() + f;
     const loguear = () => bg({ tipo: 'log', m: '→ ' + url.replace(location.origin, ''), rol: ROL }).then(ir, ir);
@@ -2689,7 +2689,14 @@
       else if (ROL === 'heroe')    await pasoHeroe();
       else if (ROL === 'farm')     await pasoFarm();
       else if (ROL === 'recursos') await pasoRecursos(info);
-      else if (ROL === 'lista')    await pasoLista(info);
+      else if (ROL === 'lista') {
+        /* la pestaña del TO DO trabaja por fetch y espera en /profile. En dorf1/dorf2
+           el juego recarga la página cada vez que termina una obra: con "sin parar"
+           (campos que terminan cada pocos segundos) la recarga cortaba cada vuelta en
+           el primer pedido ("Failed to fetch", 01/10 de madrugada). */
+        if (!enPerfil()) { estado({ txt: 'vuelvo a /profile' }); irA(location.origin + URL_PERFIL, true); return; }
+        await pasoLista(info);
+      }
     } catch (e) {
       log('error: ' + (e && e.message ? e.message : e));
       if (CFG[ROL] && CFG[ROL].cada) await programarEn(ahora() + rango(CFG[ROL].cada, [60, 90])[0] * 1000);

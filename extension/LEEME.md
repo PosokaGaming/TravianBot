@@ -181,6 +181,13 @@ mensaje entre pestaña y service worker puede tardar 5-40 s. Por eso cada paso
 guarda su avance ANTES de apretar un botón que recarga la página, y el service
 worker guarda todo en memoria (no lee el disco en cada consulta).
 
+## Cambios v5.10.1 (01/10/2026, 03:10) — la pestaña del TO DO vuelve a /profile
+
+De madrugada la pestaña quedó en /dorf1.php y el juego la recargaba cada ~5 s (recarga automática al terminar
+cada obra; con "sin parar" en 15 y 16 terminan campos cada pocos segundos): cada vuelta moría en el primer
+pedido ("TO DO · 5: Failed to fetch", 547 veces). Ahora, si la pestaña del TO DO no está en /profile, vuelve
+ahí sin esperar la pausa por página (`irA(url, true)`).
+
 ## Cambios v5.10.0 (30/09/2026, 23:20) — "sin parar"
 
 Pedido: "que construya en las dos últimas aldeas sin parar". `sin parar` en la línea: `obrasRapidas` pide
