@@ -307,6 +307,8 @@ function estructura() {
     </div>`).join('');
   const cp = document.querySelector('[data-cfg="cerrarAlParar"]');
   if (cp) cp.checked = !!cfg.cerrarAlParar;
+  const pp = document.getElementById('pausaPagina');
+  if (pp && document.activeElement !== pp) pp.value = cfg.pausaPagina == null ? 10 : cfg.pausaPagina;
   const md = document.getElementById('modo');
   if (md) md.value = cfg.modo || 'todo';
   enganchar();

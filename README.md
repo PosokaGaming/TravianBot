@@ -153,6 +153,9 @@ la lista venía filtrada por un grupo).
 
 - Si aparece un captcha / control antibot, o la sesión se cierra, **se
   detiene** y lo avisa en el panel.
+- **Pausa por página** (10 s de fábrica, en el panel): el bot no deja ninguna página antes de
+  ese tiempo, así no salta de aldea en aldea y de edificio en edificio a toda velocidad. Los
+  pedidos del TO DO LIST que no cambian de página no esperan.
 - **Freno de bucles**: si pide la misma página 5 veces en un minuto sin
   llegar, espera 5 minutos.
 - Antes de actuar en una aldea verifica que sea la aldea activa, por si estás

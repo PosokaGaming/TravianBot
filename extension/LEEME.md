@@ -177,6 +177,13 @@ mensaje entre pestaña y service worker puede tardar 5-40 s. Por eso cada paso
 guarda su avance ANTES de apretar un botón que recarga la página, y el service
 worker guarda todo en memoria (no lee el disco en cada consulta).
 
+## Cambios v5.6 (30/09/2026) — pausa por página
+
+Pedido: "que cambie de página cada 10 segundos" (saltaba de aldea en aldea y de edificio en edificio
+en 1-2 s). `cfg.pausaPagina` (10 s de fábrica, campo arriba del panel): `irA`, `clic` y la recarga no
+dejan la página antes de ese tiempo desde que cargó. Los fetch del TO DO LIST no cambian de página y no
+esperan. El primer escaneo tarda más (≈10 s por página).
+
 ## Cambios v5.5 (30/09/2026) — recursos del héroe por aldea
 
 Pedido para la otra cuenta: "Don't use Hero resources except of 15 and 16" → `15: fields 10, hero`.

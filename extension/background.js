@@ -26,6 +26,7 @@ const CFG_DEF = {
   lista   : { on: true, texto: '', archivo: '', cada: [60, 90], caballosHoras: 2, heroe: true, npc: false, npcMaxDia: 30 },
   modo: 'tropas',   // 'lista' | 'tropas' | 'farm' | 'construccion' | 'todo' — el modo elegido usa las pestañas; farm y héroe siguen de fondo
   cerrarAlParar: true,
+  pausaPagina: 10,   // s mínimos en cada página antes de pasar a otra (pedido del 30/09)
   debug: false,
 };
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TravianBot
 // @namespace    https://github.com/PosokaGaming/TravianBot
-// @version      5.5.0
+// @version      5.6.0
 // @description  Bot para Travian Legends: TO DO LIST por aldea, farm list, tropas por prioridad de cola, héroe y construcción, con modos. Una sola pestaña.
 // @author       TravianBot
 // @match        *://*.travian.com/*
@@ -60,7 +60,7 @@
 (function () {
 'use strict';
 const TB_CSS = "* { box-sizing: border-box; }\n\n.tbp {\n  margin: 0;\n  width: 420px;\n  max-height: 580px;\n  overflow-y: auto;\n  background: #1f1f22;\n  color: #e6e6e6;\n  font: 12px/1.45 system-ui, \"Segoe UI\", sans-serif;\n}\n\n.head {\n  display: flex; align-items: center; gap: 8px;\n  padding: 10px 12px; border-bottom: 1px solid #3a3a40;\n  position: sticky; top: 0; background: #1f1f22; z-index: 2;\n}\n.head b { font-size: 13px; }\n.run { font-size: 10px; padding: 2px 8px; border-radius: 99px; background: #5b5b5b; margin-left: auto; }\n.run.on { background: #2e7d32; color: #fff; }\n\n.alarma { display: none; background: #5b1b1b; color: #ffd9d9; padding: 8px 12px; font-size: 11px; }\n.alarma button { margin-left: 6px; background: #7a2a2a; border: 0; color: #ffd9d9; border-radius: 5px; padding: 2px 8px; cursor: pointer; }\n\n.acciones { display: flex; flex-direction: column; gap: 7px; padding: 10px 12px; border-bottom: 1px solid #3a3a40; }\n.big { padding: 10px; border: 0; border-radius: 7px; font-weight: 700; cursor: pointer; color: #fff; font-size: 13px; background: #2e7d32; }\n.big.rojo { background: #b53232; }\n.origen { font-size: 10px; color: #8a8a93; }\n\n.card { border-bottom: 1px solid #2e2e33; }\n.card-h { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: #26262b; }\n.card-b { padding: 8px 12px; display: flex; flex-direction: column; gap: 7px; }\n.est { margin-left: auto; color: #9bd; font-size: 11px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: #8a3b3b; flex: none; }\n.dot.ok { background: #4caf50; }\n.mini { background: #3a3a42; border: 0; color: #ddd; border-radius: 5px; padding: 3px 7px; cursor: pointer; font-size: 10px; }\n\nlabel { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #c9c9cf; }\n.chk { gap: 6px; }\ninput[type=text], input[type=number], select {\n  background: #141416; border: 1px solid #44444c; color: #eee;\n  border-radius: 5px; padding: 3px 5px; font-size: 11px;\n}\ninput[type=text] { flex: 1; min-width: 60px; }\n\n.gids { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }\n.gid { background: #232328; border: 1px solid #33333a; border-radius: 6px; padding: 6px 8px; }\n.u { display: flex; align-items: center; gap: 6px; margin: 3px 0 0 14px; }\n.u label { flex: 1; }\n.hint { color: #8a8a93; font-size: 10px; }\n\n.logwrap { border-top: 1px solid #3a3a40; max-height: 160px; overflow: auto; background: #161618; }\n#log div { padding: 2px 12px; font: 11px/1.4 ui-monospace, Consolas, monospace; border-bottom: 1px solid #202024; }\n#log span { color: #666; }\n#log em { color: #7fa; font-style: normal; }\n\n/* aldeas y edificios */\n.fila { display: flex; align-items: center; gap: 8px; }\n.escanear { background: #2f4f7a; }\n.aldea { background: #232328; border: 1px solid #33333a; border-radius: 6px; padding: 6px 8px; }\n.aldean { margin-bottom: 4px; }\n.edif { margin: 4px 0 4px 12px; }\n.edifn { color: #9a9aa4; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }\n.u { display: flex; align-items: center; gap: 5px; margin: 3px 0 0 10px; }\n.u label { flex: 1; min-width: 0; }\n.u label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.pie { display: flex; gap: 8px; padding: 8px 12px; border-top: 1px solid #3a3a40; }\n.edifh { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }\n.edifh .edifn { flex: none; margin-right: 4px; }\n.edif.oro { border-left: 3px solid #b58a2a; padding-left: 8px; }\n.edif.oro .edifn { color: #d9a441; }\n\n.modo{margin:8px 0 2px;font-weight:700;display:flex;flex-wrap:wrap;align-items:center;gap:6px}\n.modo select{font-weight:700;padding:2px 6px}\n.modo small{font-weight:400;opacity:.7;width:100%}\n\n/* TO DO LIST */\ntextarea { width: 100%; background: #141416; border: 1px solid #44444c; color: #eee; border-radius: 5px;\n           padding: 5px 6px; font: 11px/1.45 ui-monospace, Consolas, monospace; resize: vertical; }\ndetails summary { cursor: pointer; }\n.ayuda { margin-top: 4px; line-height: 1.6; }\n.lrow { padding: 3px 0; border-bottom: 1px solid #2c2c32; }\n.lrow:last-child { border-bottom: 0; }\n.lrow b { color: #e6e6e6; margin-right: 4px; }\n.lord { color: #b9c4d6; font-size: 11px; }\n.lest { color: #8fc79a; font-size: 10px; margin-top: 1px; }\n.lerr { color: #ff9b8f; font-size: 11px; margin-top: 3px; }\n\n.tbp{width:420px;max-height:80vh;overflow-y:auto;border:1px solid #3a3a40;border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.55)}\n[data-abrir],.acciones .chk{display:none}\n.cerrar{margin-left:6px}\n";
-const TB_HTML = "<div class=\"head\">\n    <b>Travian Bot</b>\n    <span class=\"run\" id=\"run\">…</span>\n  </div>\n\n  <div class=\"alarma\" id=\"alarma\"></div>\n\n  <div class=\"acciones\">\n    <button class=\"big\" id=\"toggle\">…</button>\n    <div class=\"origen\" id=\"origen\"></div>\n    <div class=\"modo\">MODO\n      <select data-cfg=\"modo\" id=\"modo\">\n        <option value=\"lista\">TO DO LIST</option>\n        <option value=\"tropas\">TROPAS</option>\n        <option value=\"farm\">FARM</option>\n        <option value=\"construccion\">CONSTRUCCIÓN</option>\n        <option value=\"todo\">TODO a la vez</option>\n      </select>\n      <small>el modo elegido usa las pestañas; farm list y héroe siguen de fondo si están tildados</small>\n    </div>\n    <label class=\"chk\"><input type=\"checkbox\" data-cfg=\"cerrarAlParar\"> cerrar las pestañas al parar</label>\n  </div>\n\n  <div id=\"cards\"></div>\n\n  <div class=\"pie\">\n    <button class=\"mini\" id=\"diag\">copiar diagnóstico</button>\n    <button class=\"mini\" id=\"limpiarlog\">limpiar log</button>\n  </div>\n\n  <div class=\"logwrap\"><div id=\"log\"></div></div>";
+const TB_HTML = "<div class=\"head\">\n    <b>Travian Bot</b>\n    <span class=\"run\" id=\"run\">…</span>\n  </div>\n\n  <div class=\"alarma\" id=\"alarma\"></div>\n\n  <div class=\"acciones\">\n    <button class=\"big\" id=\"toggle\">…</button>\n    <div class=\"origen\" id=\"origen\"></div>\n    <div class=\"modo\">MODO\n      <select data-cfg=\"modo\" id=\"modo\">\n        <option value=\"lista\">TO DO LIST</option>\n        <option value=\"tropas\">TROPAS</option>\n        <option value=\"farm\">FARM</option>\n        <option value=\"construccion\">CONSTRUCCIÓN</option>\n        <option value=\"todo\">TODO a la vez</option>\n      </select>\n      <small>el modo elegido usa las pestañas; farm list y héroe siguen de fondo si están tildados</small>\n    </div>\n    <label class=\"chk\"><input type=\"checkbox\" data-cfg=\"cerrarAlParar\"> cerrar las pestañas al parar</label>\n    <label>cada página se queda al menos <input type=\"number\" min=\"0\" max=\"120\" data-cfg=\"pausaPagina\" id=\"pausaPagina\" style=\"width:48px\"> s antes de pasar a otra</label>\n  </div>\n\n  <div id=\"cards\"></div>\n\n  <div class=\"pie\">\n    <button class=\"mini\" id=\"diag\">copiar diagnóstico</button>\n    <button class=\"mini\" id=\"limpiarlog\">limpiar log</button>\n  </div>\n\n  <div class=\"logwrap\"><div id=\"log\"></div></div>";
 /*  Travian Bot · TO DO LIST
  *
  *  Pedido del usuario el 29/09/2026: darle al bot una lista por aldea y que
@@ -394,6 +394,7 @@ const TB = (function () {
     lista   : { on: true, texto: '', cada: [60, 90], caballosHoras: 2, heroe: true, npc: false, npcMaxDia: 30 },   // TO DO LIST (lista.js); npc gasta oro: apagado de fábrica
     modo: 'todo',   // 'lista' | 'tropas' | 'farm' | 'construccion' | 'todo'
     cerrarAlParar: false,
+    pausaPagina: 10,   // s mínimos en cada página antes de pasar a otra
     debug: false,
   };
 
@@ -1068,6 +1069,8 @@ function estructura() {
     </div>`).join('');
   const cp = document.querySelector('[data-cfg="cerrarAlParar"]');
   if (cp) cp.checked = !!cfg.cerrarAlParar;
+  const pp = document.getElementById('pausaPagina');
+  if (pp && document.activeElement !== pp) pp.value = cfg.pausaPagina == null ? 10 : cfg.pausaPagina;
   const md = document.getElementById('modo');
   if (md) md.value = cfg.modo || 'todo';
   enganchar();
@@ -1401,8 +1404,17 @@ setInterval(tictac, 250);
     recargarEn((ts - ahora()) / 1000 + (sinRecarga ? 20 : 0));
     return ts - ahora();
   }
+  /* PAUSA POR PÁGINA (pedido del 30/09: "que cambie de página cada 10
+     segundos"; antes saltaba de aldea en aldea y de edificio en edificio en
+     1-2 s). Ninguna página se deja antes de N s desde que cargó: ni por irA,
+     ni por un clic, ni por la recarga. Los pedidos por fetch del TO DO LIST no
+     cambian de página y no esperan. cfg.pausaPagina (s), 10 de fábrica. */
+  const pausaPagina = () => Math.min(120, Math.max(0, CFG && CFG.pausaPagina != null ? num(CFG.pausaPagina) : 10)) * 1000;
+  const faltaPausa = () => Math.max(0, CARGADA + pausaPagina() - ahora());
+  async function esperarPausa() { const f = faltaPausa(); if (f > 0) await dormir(f); }
+
   function recargarEn(seg) {
-    const s = Math.max(4, Math.round(seg) - 1);
+    const s = Math.max(4, Math.round(seg) - 1, Math.ceil(faltaPausa() / 1000));
     try {
       const viejo = document.querySelector('meta[http-equiv="refresh"][data-tb]');
       if (viejo) viejo.remove();
@@ -1515,11 +1527,16 @@ setInterval(tictac, 250);
       return;
     }
     const ir = () => { location.href = url; };
-    bg({ tipo: 'log', m: '→ ' + url.replace(location.origin, ''), rol: ROL }).then(ir, ir);
+    const f = faltaPausa();
+    // mientras espera la pausa, el bucle no vuelve a actuar (NAVEGANDO cuenta desde que se va)
+    NAVEGANDO = ahora() + f;
+    const loguear = () => bg({ tipo: 'log', m: '→ ' + url.replace(location.origin, ''), rol: ROL }).then(ir, ir);
+    if (f > 0) dormir(f).then(loguear, loguear); else loguear();
   }
 
   async function clic(el) {
     if (!el) return false;
+    await esperarPausa();   // un clic puede cambiar de página: respeta la pausa por página
     try { el.scrollIntoView({ block: 'center' }); } catch (e) {}
     await dormir(azar(180, 520));
     ['mouseover', 'mousedown', 'mouseup', 'click'].forEach(t => {
@@ -2046,7 +2063,7 @@ setInterval(tictac, 250);
   }
 
   async function clicQueNavega(el, que) {
-    NAVEGANDO = ahora();
+    NAVEGANDO = ahora() + faltaPausa();
     cancelarRecarga();
     await bg({ tipo: 'log', m: '→ ' + que, rol: ROL });
     await clic(el);

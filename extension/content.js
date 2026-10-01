@@ -86,8 +86,17 @@
     recargarEn((ts - ahora()) / 1000 + (sinRecarga ? 20 : 0));
     return ts - ahora();
   }
+  /* PAUSA POR PÁGINA (pedido del 30/09: "que cambie de página cada 10
+     segundos"; antes saltaba de aldea en aldea y de edificio en edificio en
+     1-2 s). Ninguna página se deja antes de N s desde que cargó: ni por irA,
+     ni por un clic, ni por la recarga. Los pedidos por fetch del TO DO LIST no
+     cambian de página y no esperan. cfg.pausaPagina (s), 10 de fábrica. */
+  const pausaPagina = () => Math.min(120, Math.max(0, CFG && CFG.pausaPagina != null ? num(CFG.pausaPagina) : 10)) * 1000;
+  const faltaPausa = () => Math.max(0, CARGADA + pausaPagina() - ahora());
+  async function esperarPausa() { const f = faltaPausa(); if (f > 0) await dormir(f); }
+
   function recargarEn(seg) {
-    const s = Math.max(4, Math.round(seg) - 1);
+    const s = Math.max(4, Math.round(seg) - 1, Math.ceil(faltaPausa() / 1000));
     try {
       const viejo = document.querySelector('meta[http-equiv="refresh"][data-tb]');
       if (viejo) viejo.remove();
@@ -200,11 +209,16 @@
       return;
     }
     const ir = () => { location.href = url; };
-    bg({ tipo: 'log', m: '→ ' + url.replace(location.origin, ''), rol: ROL }).then(ir, ir);
+    const f = faltaPausa();
+    // mientras espera la pausa, el bucle no vuelve a actuar (NAVEGANDO cuenta desde que se va)
+    NAVEGANDO = ahora() + f;
+    const loguear = () => bg({ tipo: 'log', m: '→ ' + url.replace(location.origin, ''), rol: ROL }).then(ir, ir);
+    if (f > 0) dormir(f).then(loguear, loguear); else loguear();
   }
 
   async function clic(el) {
     if (!el) return false;
+    await esperarPausa();   // un clic puede cambiar de página: respeta la pausa por página
     try { el.scrollIntoView({ block: 'center' }); } catch (e) {}
     await dormir(azar(180, 520));
     ['mouseover', 'mousedown', 'mouseup', 'click'].forEach(t => {
@@ -731,7 +745,7 @@
   }
 
   async function clicQueNavega(el, que) {
-    NAVEGANDO = ahora();
+    NAVEGANDO = ahora() + faltaPausa();
     cancelarRecarga();
     await bg({ tipo: 'log', m: '→ ' + que, rol: ROL });
     await clic(el);

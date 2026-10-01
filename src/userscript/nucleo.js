@@ -26,6 +26,7 @@ const TB = (function () {
     lista   : { on: true, texto: '', cada: [60, 90], caballosHoras: 2, heroe: true, npc: false, npcMaxDia: 30 },   // TO DO LIST (lista.js); npc gasta oro: apagado de fábrica
     modo: 'todo',   // 'lista' | 'tropas' | 'farm' | 'construccion' | 'todo'
     cerrarAlParar: false,
+    pausaPagina: 10,   // s mínimos en cada página antes de pasar a otra
     debug: false,
   };
 
