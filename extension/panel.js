@@ -348,7 +348,7 @@ function pintarEstado() {
     const nuevo = e ? hhmm(e.t) + ' · ' + e.txt : '';
     if (el.textContent !== nuevo) el.textContent = nuevo;
   });
-  document.getElementById('log').innerHTML = log.slice(-40).reverse()
+  document.getElementById('log').innerHTML = log.slice(VER_TODO_LOG ? -400 : -40).reverse()
     .map(x => `<div><span>${hhmm(x.t)}</span> <em>${esc(x.r)}</em> ${esc(x.m)}</div>`).join('');
 }
 
@@ -524,6 +524,15 @@ document.getElementById('diag').onclick = async () => {
   } catch (e) { alert('No pude copiar al portapapeles.'); }
 };
 document.getElementById('limpiarlog').onclick = async () => { await bg({ tipo: 'limpiarLog' }); refrescar(true); };
+/* 📜 log completo (30/09): en la extensión abre log.html en una pestaña (estado de
+   cada aldea + todo el log, con filtro); en el userscript muestra 400 líneas acá */
+var VER_TODO_LOG = false;   // var: el render puede leerla antes de esta línea
+document.getElementById('logcompleto').onclick = () => {
+  if (typeof chrome !== 'undefined' && chrome.tabs && chrome.runtime && chrome.runtime.getURL) { chrome.tabs.create({ url: chrome.runtime.getURL('log.html') }); return; }
+  VER_TODO_LOG = !VER_TODO_LOG;
+  document.getElementById('logcompleto').textContent = VER_TODO_LOG ? '📜 menos log' : '📜 log completo';
+  refrescar(true);
+};
 
 /* ═══════════ el reloj ═══════════
    Aparte del refresco de estado: si se dibujara con cada respuesta del

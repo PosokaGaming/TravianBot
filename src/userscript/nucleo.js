@@ -59,7 +59,7 @@ const TB = (function () {
   function log(msg, rol) {
     const l = get('tb_log', []);
     l.push({ t: Date.now(), r: rol || 'bot', m: String(msg) });
-    while (l.length > 150) l.shift();
+    while (l.length > 1500) l.shift();
     set('tb_log', l);
   }
 

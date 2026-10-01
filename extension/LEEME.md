@@ -180,6 +180,14 @@ mensaje entre pestaña y service worker puede tardar 5-40 s. Por eso cada paso
 guarda su avance ANTES de apretar un botón que recarga la página, y el service
 worker guarda todo en memoria (no lee el disco en cada consulta).
 
+## Cambios v5.9.0 (30/09/2026, 23:10) — log completo
+
+Pedido: "implementar LOG al bot para ver qué hace". Botón **📜 log completo** en el panel → `log.html`
+(pestaña propia): arriba qué hace cada aldea ahora, abajo todo el log (hasta 1.500 líneas) con filtro
+por texto y por tipo (acciones / problemas); se actualiza cada 5 s. Cada vuelta del TO DO deja una línea
+de resumen (`vuelta TO DO: … ⬆ obras · 💱 NPC · 🚚 envíos · ⏳ obrero · 💤 recursos`). En el userscript
+el botón muestra 400 líneas en el mismo panel. `empaquetar.py` deja afuera cualquier `todo*.txt`.
+
 ## Cambios v5.8.3 (30/09/2026, 22:55) — "que suban sí o sí 15 y 16"
 
 Con `hero` + `npc` en la misma línea: primero el héroe si tiene TODO lo que falta (sin oro); si no, el

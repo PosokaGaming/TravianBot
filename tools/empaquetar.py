@@ -20,8 +20,9 @@ import zipfile
 RAIZ = pathlib.Path(__file__).resolve().parent.parent
 EXT = RAIZ / 'extension'
 DIST = RAIZ / 'dist'
-# de cada jugador: nunca van en el paquete
+# de cada jugador: nunca van en el paquete (todo.txt, todo_<cuenta>.txt, ajustes.json)
 PRIVADOS = {'todo.txt', 'ajustes.json'}
+es_privado = lambda nombre: nombre in PRIVADOS or (nombre.startswith('todo') and nombre.endswith('.txt'))
 
 
 def main():
@@ -32,7 +33,7 @@ def main():
     for viejo in DIST.glob('TravianBot-extension-*.zip'):
         viejo.unlink()
     destino = DIST / ('TravianBot-extension-%s.zip' % version)
-    archivos = sorted(p for p in EXT.rglob('*') if p.is_file() and p.name not in PRIVADOS
+    archivos = sorted(p for p in EXT.rglob('*') if p.is_file() and not es_privado(p.name)
                       and '__pycache__' not in p.parts)
     with zipfile.ZipFile(destino, 'w', zipfile.ZIP_DEFLATED) as z:
         for p in archivos:
@@ -42,7 +43,7 @@ def main():
 
     with zipfile.ZipFile(destino) as z:
         nombres = z.namelist()
-    fuera = [n for n in nombres if pathlib.PurePosixPath(n).name in PRIVADOS]
+    fuera = [n for n in nombres if es_privado(pathlib.PurePosixPath(n).name)]
     if fuera:
         sys.exit('ERROR: el zip lleva archivos privados: %s' % ', '.join(fuera))
     print('OK v%s: %s (%d archivos) + dist/TravianBot.user.js' % (version, destino.relative_to(RAIZ), len(nombres)))

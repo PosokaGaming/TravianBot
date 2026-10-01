@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TravianBot
 // @namespace    https://github.com/PosokaGaming/TravianBot
-// @version      5.8.3
+// @version      5.9.0
 // @description  Bot para Travian Legends: TO DO LIST por aldea, farm list, tropas por prioridad de cola, héroe y construcción, con modos. Una sola pestaña.
 // @author       TravianBot
 // @match        *://*.travian.com/*
@@ -60,7 +60,7 @@
 (function () {
 'use strict';
 const TB_CSS = "* { box-sizing: border-box; }\n\n.tbp {\n  margin: 0;\n  width: 420px;\n  max-height: 580px;\n  overflow-y: auto;\n  background: #1f1f22;\n  color: #e6e6e6;\n  font: 12px/1.45 system-ui, \"Segoe UI\", sans-serif;\n}\n\n.head {\n  display: flex; align-items: center; gap: 8px;\n  padding: 10px 12px; border-bottom: 1px solid #3a3a40;\n  position: sticky; top: 0; background: #1f1f22; z-index: 2;\n}\n.head b { font-size: 13px; }\n.run { font-size: 10px; padding: 2px 8px; border-radius: 99px; background: #5b5b5b; margin-left: auto; }\n.run.on { background: #2e7d32; color: #fff; }\n\n.alarma { display: none; background: #5b1b1b; color: #ffd9d9; padding: 8px 12px; font-size: 11px; }\n.alarma button { margin-left: 6px; background: #7a2a2a; border: 0; color: #ffd9d9; border-radius: 5px; padding: 2px 8px; cursor: pointer; }\n\n.acciones { display: flex; flex-direction: column; gap: 7px; padding: 10px 12px; border-bottom: 1px solid #3a3a40; }\n.big { padding: 10px; border: 0; border-radius: 7px; font-weight: 700; cursor: pointer; color: #fff; font-size: 13px; background: #2e7d32; }\n.big.rojo { background: #b53232; }\n.origen { font-size: 10px; color: #8a8a93; }\n\n.card { border-bottom: 1px solid #2e2e33; }\n.card-h { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: #26262b; }\n.card-b { padding: 8px 12px; display: flex; flex-direction: column; gap: 7px; }\n.est { margin-left: auto; color: #9bd; font-size: 11px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: #8a3b3b; flex: none; }\n.dot.ok { background: #4caf50; }\n.mini { background: #3a3a42; border: 0; color: #ddd; border-radius: 5px; padding: 3px 7px; cursor: pointer; font-size: 10px; }\n\nlabel { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #c9c9cf; }\n.chk { gap: 6px; }\ninput[type=text], input[type=number], select {\n  background: #141416; border: 1px solid #44444c; color: #eee;\n  border-radius: 5px; padding: 3px 5px; font-size: 11px;\n}\ninput[type=text] { flex: 1; min-width: 60px; }\n\n.gids { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }\n.gid { background: #232328; border: 1px solid #33333a; border-radius: 6px; padding: 6px 8px; }\n.u { display: flex; align-items: center; gap: 6px; margin: 3px 0 0 14px; }\n.u label { flex: 1; }\n.hint { color: #8a8a93; font-size: 10px; }\n\n.logwrap { border-top: 1px solid #3a3a40; max-height: 160px; overflow: auto; background: #161618; }\n#log div { padding: 2px 12px; font: 11px/1.4 ui-monospace, Consolas, monospace; border-bottom: 1px solid #202024; }\n#log span { color: #666; }\n#log em { color: #7fa; font-style: normal; }\n\n/* aldeas y edificios */\n.fila { display: flex; align-items: center; gap: 8px; }\n.escanear { background: #2f4f7a; }\n.aldea { background: #232328; border: 1px solid #33333a; border-radius: 6px; padding: 6px 8px; }\n.aldean { margin-bottom: 4px; }\n.edif { margin: 4px 0 4px 12px; }\n.edifn { color: #9a9aa4; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }\n.u { display: flex; align-items: center; gap: 5px; margin: 3px 0 0 10px; }\n.u label { flex: 1; min-width: 0; }\n.u label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.pie { display: flex; gap: 8px; padding: 8px 12px; border-top: 1px solid #3a3a40; }\n.edifh { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }\n.edifh .edifn { flex: none; margin-right: 4px; }\n.edif.oro { border-left: 3px solid #b58a2a; padding-left: 8px; }\n.edif.oro .edifn { color: #d9a441; }\n\n.modo{margin:8px 0 2px;font-weight:700;display:flex;flex-wrap:wrap;align-items:center;gap:6px}\n.modo select{font-weight:700;padding:2px 6px}\n.modo small{font-weight:400;opacity:.7;width:100%}\n\n/* TO DO LIST */\ntextarea { width: 100%; background: #141416; border: 1px solid #44444c; color: #eee; border-radius: 5px;\n           padding: 5px 6px; font: 11px/1.45 ui-monospace, Consolas, monospace; resize: vertical; }\ndetails summary { cursor: pointer; }\n.ayuda { margin-top: 4px; line-height: 1.6; }\n.lrow { padding: 3px 0; border-bottom: 1px solid #2c2c32; }\n.lrow:last-child { border-bottom: 0; }\n.lrow b { color: #e6e6e6; margin-right: 4px; }\n.lord { color: #b9c4d6; font-size: 11px; }\n.lest { color: #8fc79a; font-size: 10px; margin-top: 1px; }\n.lerr { color: #ff9b8f; font-size: 11px; margin-top: 3px; }\n\n.tbp{width:420px;max-height:80vh;overflow-y:auto;border:1px solid #3a3a40;border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.55)}\n[data-abrir],.acciones .chk{display:none}\n.cerrar{margin-left:6px}\n";
-const TB_HTML = "<div class=\"head\">\n    <b>Travian Bot</b>\n    <span class=\"run\" id=\"run\">…</span>\n  </div>\n\n  <div class=\"alarma\" id=\"alarma\"></div>\n\n  <div class=\"acciones\">\n    <button class=\"big\" id=\"toggle\">…</button>\n    <div class=\"origen\" id=\"origen\"></div>\n    <div class=\"modo\">MODO\n      <select data-cfg=\"modo\" id=\"modo\">\n        <option value=\"lista\">TO DO LIST</option>\n        <option value=\"tropas\">TROPAS</option>\n        <option value=\"farm\">FARM</option>\n        <option value=\"construccion\">CONSTRUCCIÓN</option>\n        <option value=\"todo\">TODO a la vez</option>\n      </select>\n      <small>el modo elegido usa las pestañas; farm list y héroe siguen de fondo si están tildados</small>\n    </div>\n    <label class=\"chk\"><input type=\"checkbox\" data-cfg=\"cerrarAlParar\"> cerrar las pestañas al parar</label>\n    <label>cada página se queda al menos <input type=\"number\" min=\"0\" max=\"120\" data-cfg=\"pausaPagina\" id=\"pausaPagina\" style=\"width:48px\"> s antes de pasar a otra</label>\n  </div>\n\n  <div id=\"cards\"></div>\n\n  <div class=\"pie\">\n    <button class=\"mini\" id=\"diag\">copiar diagnóstico</button>\n    <button class=\"mini\" id=\"limpiarlog\">limpiar log</button>\n  </div>\n\n  <div class=\"logwrap\"><div id=\"log\"></div></div>";
+const TB_HTML = "<div class=\"head\">\n    <b>Travian Bot</b>\n    <span class=\"run\" id=\"run\">…</span>\n  </div>\n\n  <div class=\"alarma\" id=\"alarma\"></div>\n\n  <div class=\"acciones\">\n    <button class=\"big\" id=\"toggle\">…</button>\n    <div class=\"origen\" id=\"origen\"></div>\n    <div class=\"modo\">MODO\n      <select data-cfg=\"modo\" id=\"modo\">\n        <option value=\"lista\">TO DO LIST</option>\n        <option value=\"tropas\">TROPAS</option>\n        <option value=\"farm\">FARM</option>\n        <option value=\"construccion\">CONSTRUCCIÓN</option>\n        <option value=\"todo\">TODO a la vez</option>\n      </select>\n      <small>el modo elegido usa las pestañas; farm list y héroe siguen de fondo si están tildados</small>\n    </div>\n    <label class=\"chk\"><input type=\"checkbox\" data-cfg=\"cerrarAlParar\"> cerrar las pestañas al parar</label>\n    <label>cada página se queda al menos <input type=\"number\" min=\"0\" max=\"120\" data-cfg=\"pausaPagina\" id=\"pausaPagina\" style=\"width:48px\"> s antes de pasar a otra</label>\n  </div>\n\n  <div id=\"cards\"></div>\n\n  <div class=\"pie\">\n    <button class=\"mini\" id=\"diag\">copiar diagnóstico</button>\n    <button class=\"mini\" id=\"limpiarlog\">limpiar log</button>\n    <button class=\"mini\" id=\"logcompleto\">📜 log completo</button>\n  </div>\n\n  <div class=\"logwrap\"><div id=\"log\"></div></div>";
 /*  Travian Bot · TO DO LIST
  *
  *  Pedido del usuario el 29/09/2026: darle al bot una lista por aldea y que
@@ -460,7 +460,7 @@ const TB = (function () {
   function log(msg, rol) {
     const l = get('tb_log', []);
     l.push({ t: Date.now(), r: rol || 'bot', m: String(msg) });
-    while (l.length > 150) l.shift();
+    while (l.length > 1500) l.shift();
     set('tb_log', l);
   }
 
@@ -1163,7 +1163,7 @@ function pintarEstado() {
     const nuevo = e ? hhmm(e.t) + ' · ' + e.txt : '';
     if (el.textContent !== nuevo) el.textContent = nuevo;
   });
-  document.getElementById('log').innerHTML = log.slice(-40).reverse()
+  document.getElementById('log').innerHTML = log.slice(VER_TODO_LOG ? -400 : -40).reverse()
     .map(x => `<div><span>${hhmm(x.t)}</span> <em>${esc(x.r)}</em> ${esc(x.m)}</div>`).join('');
 }
 
@@ -1339,6 +1339,15 @@ document.getElementById('diag').onclick = async () => {
   } catch (e) { alert('No pude copiar al portapapeles.'); }
 };
 document.getElementById('limpiarlog').onclick = async () => { await bg({ tipo: 'limpiarLog' }); refrescar(true); };
+/* 📜 log completo (30/09): en la extensión abre log.html en una pestaña (estado de
+   cada aldea + todo el log, con filtro); en el userscript muestra 400 líneas acá */
+var VER_TODO_LOG = false;   // var: el render puede leerla antes de esta línea
+document.getElementById('logcompleto').onclick = () => {
+  if (typeof chrome !== 'undefined' && chrome.tabs && chrome.runtime && chrome.runtime.getURL) { chrome.tabs.create({ url: chrome.runtime.getURL('log.html') }); return; }
+  VER_TODO_LOG = !VER_TODO_LOG;
+  document.getElementById('logcompleto').textContent = VER_TODO_LOG ? '📜 menos log' : '📜 log completo';
+  refrescar(true);
+};
 
 /* ═══════════ el reloj ═══════════
    Aparte del refresco de estado: si se dibujara con cada respuesta del
@@ -3782,6 +3791,7 @@ setInterval(tictac, 250);
     ss.del('tb_lvacia');
     cancelarRecarga();
     SYNC_RONDA = false;
+    const T_VUELTA = ahora();
     const H = Math.max(1, num(c.caballosHoras) || 2) * 3600;
     const ctx = { espera: ss.json('tb_lespera', {}), est: {}, ultFiestas: num(ss.get('tb_lfiestas')), fiestaAntes: ss.json('tb_lfiestaest', {}),
                   pedidos: ss.json('tb_lpedidos', {}), cereal: {}, rojas: ss.json('tb_lrojas', {}), reservas: {} };
@@ -3858,6 +3868,12 @@ setInterval(tictac, 250);
     ss.set('tb_lrojas', JSON.stringify(ctx.rojas));
     ss.set('tb_lfiestas', String(ctx.ultFiestas || 0));
     ss.set('tb_lfiestaest', JSON.stringify(ctx.fiestaAntes || {}));
+    /* una línea por vuelta en el log (pedido del 30/09: "ver qué hace"): cuánto hizo y qué espera */
+    const textos = Object.values(ctx.est);
+    const cuantas = rx => textos.filter(t => rx.test(t)).length;
+    log('vuelta TO DO: ' + dids.length + ' aldeas · ⬆ ' + cuantas(/⬆|🏗/) + ' obras · 💱 ' + cuantas(/💱/) + ' NPC · 🚚 ' + cuantas(/🚚 →/) +
+        ' envíos · ⏳ obrero ' + cuantas(/esperando al obrero/) + ' · 💤 recursos ' + cuantas(/esperando recursos|faltan|sin recursos/) +
+        (cuantas(/⚠|no pude|falló/) ? ' · ⚠ ' + cuantas(/⚠|no pude|falló/) : '') + ' (' + Math.round((ahora() - T_VUELTA) / 1000) + ' s)');
     await bg({ tipo: 'listaEstado', est: ctx.est, dids });
     /* la próxima vuelta arranca con la página recargada: con "sinRecarga" el
        meta refresh de respaldo (sacar el <meta> no lo cancela en Chrome)

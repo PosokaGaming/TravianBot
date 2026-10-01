@@ -80,7 +80,7 @@ async function leerCfg() {
 async function log(msg, rol) {
   const l = await get('tb_log', []);
   l.push({ t: Date.now(), r: rol || 'fondo', m: String(msg) });
-  while (l.length > 150) l.shift();
+  while (l.length > 1500) l.shift();   // la página de log (log.html) muestra todo
   await set('tb_log', l);
 }
 
@@ -773,6 +773,16 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
       }
       case 'cancelarEscaneo': await set('tb_scan', { activo: false }); responder({ ok: true }); break;
 
+      /* la página de log (log.html, 30/09): log completo + qué hace cada aldea */
+      case 'verLog': {
+        const cfg = await leerCfg();
+        responder({
+          run: await get('tb_run', false), modo: cfg.modo,
+          log: await get('tb_log', []), aldeas: await get('tb_aldeas', []),
+          listaEstado: await get('tb_lista_estado', {}), estadoLista: await get('tb_estado_lista', {}),
+        });
+        break;
+      }
       case 'estadoGeneral': {
         const cfg = await leerCfg();
         const m3 = await tabsMapa();

@@ -170,6 +170,9 @@ la lista venía filtrada por un grupo).
 
 ## Si algo falla
 
+En el panel, **📜 log completo** abre una página con lo que está haciendo cada aldea y todo el log
+(con filtro). En Tampermonkey muestra las últimas 400 líneas en el mismo panel.
+
 En el panel: **copiar diagnóstico** guarda la URL, la aldea y un pedazo del
 HTML de la última falla. Pegalo en un [issue](../../issues) junto con el log
 del panel.

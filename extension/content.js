@@ -2410,6 +2410,7 @@
     ss.del('tb_lvacia');
     cancelarRecarga();
     SYNC_RONDA = false;
+    const T_VUELTA = ahora();
     const H = Math.max(1, num(c.caballosHoras) || 2) * 3600;
     const ctx = { espera: ss.json('tb_lespera', {}), est: {}, ultFiestas: num(ss.get('tb_lfiestas')), fiestaAntes: ss.json('tb_lfiestaest', {}),
                   pedidos: ss.json('tb_lpedidos', {}), cereal: {}, rojas: ss.json('tb_lrojas', {}), reservas: {} };
@@ -2486,6 +2487,12 @@
     ss.set('tb_lrojas', JSON.stringify(ctx.rojas));
     ss.set('tb_lfiestas', String(ctx.ultFiestas || 0));
     ss.set('tb_lfiestaest', JSON.stringify(ctx.fiestaAntes || {}));
+    /* una línea por vuelta en el log (pedido del 30/09: "ver qué hace"): cuánto hizo y qué espera */
+    const textos = Object.values(ctx.est);
+    const cuantas = rx => textos.filter(t => rx.test(t)).length;
+    log('vuelta TO DO: ' + dids.length + ' aldeas · ⬆ ' + cuantas(/⬆|🏗/) + ' obras · 💱 ' + cuantas(/💱/) + ' NPC · 🚚 ' + cuantas(/🚚 →/) +
+        ' envíos · ⏳ obrero ' + cuantas(/esperando al obrero/) + ' · 💤 recursos ' + cuantas(/esperando recursos|faltan|sin recursos/) +
+        (cuantas(/⚠|no pude|falló/) ? ' · ⚠ ' + cuantas(/⚠|no pude|falló/) : '') + ' (' + Math.round((ahora() - T_VUELTA) / 1000) + ' s)');
     await bg({ tipo: 'listaEstado', est: ctx.est, dids });
     /* la próxima vuelta arranca con la página recargada: con "sinRecarga" el
        meta refresh de respaldo (sacar el <meta> no lo cancela en Chrome)

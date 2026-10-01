@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Travian Bot · log</title>
+<style>
+  :root { --bg: #f4f6f1; --fg: #1b2318; --muted: #5a6554; --line: #d8dfd1; --surface: #fff; --accent: #2e6b30; --warn: #a3510f; --bad: #b3261e; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #121611; --fg: #e3e9de; --muted: #9ba694; --line: #2d3629; --surface: #1a2018; --accent: #7fc481; --warn: #e3a35e; --bad: #f08a80; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 "Segoe UI", system-ui, sans-serif; padding: 16px; }
+  h1 { font-size: 18px; margin: 0; }
+  h2 { font-size: 14px; margin: 18px 0 8px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .cab { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+  .estado { font-weight: 600; }
+  .estado.on { color: var(--accent); } .estado.off { color: var(--bad); }
+  .controles { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  input[type=search], select { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--fg); }
+  button { font: inherit; padding: 5px 10px; border: 1px solid var(--accent); border-radius: 6px; background: transparent; color: var(--accent); cursor: pointer; }
+  .tabla { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; vertical-align: top; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: 0; }
+  th { font-size: 12px; color: var(--muted); }
+  td.h { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--muted); }
+  td.a { white-space: nowrap; font-weight: 600; }
+  td.r { white-space: nowrap; color: var(--muted); font-size: 12px; }
+  .viejo td { opacity: .55; }
+  .accion td.m { color: var(--accent); font-weight: 600; }
+  .aviso td.m { color: var(--warn); }
+  .error td.m { color: var(--bad); font-weight: 600; }
+  .resumen td.m { color: var(--muted); }
+  .pie { color: var(--muted); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <div class="cab">
+    <div>
+      <h1>Travian Bot · qué está haciendo</h1>
+      <div><span class="estado" id="estado">…</span> · <span id="cuenta"></span></div>
+    </div>
+    <div class="controles">
+      <input type="search" id="filtro" placeholder="filtrar (ej. 15, NPC, ⬆, héroe)">
+      <select id="tipo">
+        <option value="todo">todo</option>
+        <option value="acciones">sólo acciones (⬆ 💱 🚚 🌾 🎉 héroe)</option>
+        <option value="problemas">sólo problemas</option>
+      </select>
+      <button id="pausa">pausar</button>
+    </div>
+  </div>
+
+  <h2>Cada aldea ahora</h2>
+  <div class="tabla"><table><thead><tr><th>Aldea</th><th>Hora</th><th>Estado</th></tr></thead><tbody id="aldeas"></tbody></table></div>
+
+  <h2>Log</h2>
+  <div class="tabla"><table><thead><tr><th>Hora</th><th>Quién</th><th>Qué</th></tr></thead><tbody id="log"></tbody></table></div>
+  <div class="pie" id="pie"></div>
+  <script src="log.js"></script>
+</body>
+</html>
