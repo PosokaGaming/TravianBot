@@ -17,3 +17,5 @@ extension/ajustes.json
 dist/
 # script aparte de TRAVCO (vacas): no es parte del bot
 vacas/
+# listas de otras cuentas (perfiles por cuenta)
+extension/todo_*.txt

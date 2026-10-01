@@ -83,6 +83,9 @@ todas: fiestas                      # grande si se puede, si no chica
 | `cereal` | sólo campos de cereal (lo mismo `madera`, `barro`, `hierro`) |
 | `tropas A + B` | entrena sin parar; `A/B` = A, y si no está investigada, B |
 | `hospital` | cura a los heridos con lo que alcance |
+| `1 crop 18` · `un cereal 18` | UN solo campo (el de nivel más alto) hasta ese nivel |
+| `… npc` (ej. `1 crop 18 npc`) | cuando el TOTAL de la aldea alcanza el costo, NPC al costo exacto y la sube (no usa el tope diario; 1 NPC cada 10 min como mucho) |
+| `supply 2` · `abastecer 2` (`supply 2 at 90`) | cuando el granero de ESTA aldea llega al 95 %: NPC a ⅓ madera, ⅓ barro, ⅓ hierro y le manda a 2, con comerciantes, sólo lo que le falta para su próxima obra (sin desbordar su depósito, tope 480.000) |
 | `hero` · `no hero` | esa aldea usa los recursos del héroe, **también para obras** (si a la obra le falta y el héroe tiene todo lo que falta) · nunca. Si alguna aldea tiene `hero`, las demás no los usan (ni para el establo ni para el rescate de cereal). Sin `hero` en la lista, decide el tilde del panel |
 | `fiestas` / `fiestas chicas` | fiesta grande donde el ayuntamiento y los recursos lo permitan, si no chica |
 | `todas:` · `nada` · `#` | para todas las aldeas · esa aldea quieta · comentario |
@@ -176,6 +179,27 @@ pestañas de fondo y el service worker con prioridad *Idle* / modo eficiencia
 mensaje entre pestaña y service worker puede tardar 5-40 s. Por eso cada paso
 guarda su avance ANTES de apretar un botón que recarga la página, y el service
 worker guarda todo en memoria (no lee el disco en cada consulta).
+
+## Cambios v5.8 (30/09/2026) — otra cuenta: abastecer, NPC exacto y perfiles
+
+- `supply 2`: granero de esta aldea ≥95 % → NPC ⅓/⅓/⅓ → manda a 2 lo que le falta (API del juego
+  `PUT+POST /api/v1/marketplace/resources/send`, destino por coordenadas, sale de la aldea ACTIVA: se
+  verifica por GraphQL antes de mandar; lo que va en camino se anota en `tb_lenvios`).
+- `1 crop 18 npc`: un solo campo (el más alto) y NPC al costo exacto cuando el total alcanza.
+- Perfiles por cuenta en el service worker (`tb_perfiles`, `CLAVES_CUENTA`): al aparecer otra cuenta
+  conocida se guarda la que sale y se carga la que entra. `ajustes.json` → `"cuenta": {"nueva": true,
+  "fichero": "todo_otra.txt", …}` adopta la próxima cuenta desconocida; `"arrancar": true` arranca.
+  Cada perfil lee su archivo de lista (`lista.fichero`, por defecto todo.txt). `lista.rescateNpc` separa
+  el NPC del rescate de cereal del NPC general.
+
+## Cambios v5.7 (30/09/2026) — la sesión de otra cuenta
+
+El 30/09 a las 21:28 se entró con otra cuenta del MISMO servidor en este perfil: el bot sumó sus 16
+aldeas a las mías y siguió trabajando con esa sesión (con `todas: fiestas` y el rescate de cereal habría
+gastado recursos y oro de la otra cuenta). Ahora `tb_cuenta` = las aldeas de la cuenta (la arma el
+escaneo; si no hay, lo escaneado en `tb_edificios`). Si la página no comparte NINGUNA aldea con la
+cuenta: `aldeasSync` responde `otraCuenta`, la pestaña espera (⏸) y la farm list por API no sale. Al
+volver la cuenta, saca las aldeas ajenas que se habían mezclado. Escanear = cambiar de cuenta a propósito.
 
 ## Cambios v5.6 (30/09/2026) — pausa por página
 

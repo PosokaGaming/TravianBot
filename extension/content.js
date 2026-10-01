@@ -1414,12 +1414,17 @@
       .map(e => ({ did: String(e.getAttribute('data-did') || ''), nombre: txt(e.querySelector('.name')) }))
       .filter(a => a.did);
   }
+  /* la página es de OTRA cuenta (30/09: alguien entró con otra cuenta del mismo
+     servidor en este perfil): el bot no hace nada y vuelve a mirar en 1 min */
+  let OTRA_CUENTA = false, CAMBIO_CUENTA = false;
   async function sincronizarAldeas(raiz) {
     const nuevas = aldeasDelRecuadro(raiz);
     if (!nuevas.length || !INFO) return;
     const firma = l => l.map(a => a.did + ':' + normNombre(a.nombre)).sort().join('|');
-    if (firma(nuevas) === firma(INFO.aldeas || [])) return;
+    if (firma(nuevas) === firma(INFO.aldeas || [])) { OTRA_CUENTA = false; return; }
     const r = await bg({ tipo: 'aldeasSync', aldeas: nuevas });
+    OTRA_CUENTA = !!(r && r.otraCuenta);
+    CAMBIO_CUENTA = !!(r && r.cambioCuenta);   // el service worker cargó el perfil de otra cuenta: esta vuelta ya no vale
     if (r && Array.isArray(r.aldeas)) INFO.aldeas = r.aldeas;
   }
   let aldeasMiradas = false;   // una vez por carga de página
@@ -1462,7 +1467,11 @@
     const d = await traerDoc(url, opciones);
     if ($('#botprotection, .botProtection, form[name="botprotection"], #bot_check', d)) { const e = new Error('antibot'); e.parar = 'Captcha / control antibot en TO DO'; throw e; }
     if (!$('input.villageInput', d) && $('input[type="password"]', d)) { const e = new Error('login'); e.parar = 'Sesión cerrada (TO DO)'; throw e; }
-    if (!SYNC_RONDA) { SYNC_RONDA = true; await sincronizarAldeas(d); }
+    if (!SYNC_RONDA) {
+      SYNC_RONDA = true;
+      await sincronizarAldeas(d);
+      if (OTRA_CUENTA || CAMBIO_CUENTA) { const e = new Error(CAMBIO_CUENTA ? 'cambié de cuenta' : 'la sesión es de otra cuenta'); e.otraCuenta = true; throw e; }
+    }
     return d;
   }
   const didDe = d => { const e = $('input.villageInput[data-did]', d); return e ? String(e.getAttribute('data-did')) : ''; };
@@ -1824,15 +1833,18 @@
     const slots = d2 ? leerSlotsDorf2(d2) : [];
     if (slots.length) { bg({ tipo: 'edificiosDe', did, slots }); if (INFO.edificios) INFO.edificios[did] = slots; }
     const enObra = $$('.buildingList li', d1 || d2).length;
-    let pendientes = 0, cand = null, primera = null, prioX = null;
+    let pendientes = 0, cand = null, primera = null, primeraO = null, prioX = null;
     const notas = [];
     const vacias = slots.filter(CASILLA_LIBRE);
     const pedidoEn = (aid, gid) => { const p = ctx.pedidos[did + '|a' + aid]; return p && ahora() - p.t < 4 * 3600000 && (gid == null || p.g === gid) ? p : null; };
     for (const o of obras) {
       let lista;
       if (o.tipo === 'campos') {
-        lista = campos.filter(x => o.tipos.indexOf(x.gid) >= 0 && x.nivel < o.max && !/maxLevel/.test(x.estado))
-                      .map(x => ({ id: x.id, gid: x.gid, nivel: x.nivel, estado: x.estado, nombre: RECURSO[x.gid], en: CAMPO_EN[x.gid], campo: true }));
+        let cs = campos.filter(x => o.tipos.indexOf(x.gid) >= 0);
+        // "1 crop 18": UN solo campo, el más alto (siempre el mismo hasta que llegue)
+        if (o.uno) cs = cs.slice().sort((a, b) => b.nivel - a.nivel || a.id - b.id).slice(0, 1);
+        lista = cs.filter(x => x.nivel < o.max && !/maxLevel/.test(x.estado))
+                  .map(x => ({ id: x.id, gid: x.gid, nivel: x.nivel, estado: x.estado, nombre: RECURSO[x.gid], en: CAMPO_EN[x.gid], campo: true }));
       } else {
         const gidO = o.gid || ((slots.find(x => x.aid === 40 && TB_LISTA.GIDS_MURALLA.indexOf(x.gid) >= 0) || slots.find(x => TB_LISTA.GIDS_MURALLA.indexOf(x.gid) >= 0) || {}).gid) || 0;
         const deEse = slots.filter(x => x.gid === gidO);
@@ -1855,7 +1867,7 @@
       const libres = lista.filter(x => !pedidoVivo(ctx, did, x));
       const listo = libres.filter(x => /good|nuevo/.test(x.estado)).sort((a, b) => a.nivel - b.nivel)[0];
       if (listo && !cand) cand = listo;
-      if (!primera) primera = libres.filter(x => !/underConstruction|nuevo/.test(x.estado)).sort((a, b) => a.nivel - b.nivel)[0] || null;
+      if (!primera) { primera = libres.filter(x => !/underConstruction|nuevo/.test(x.estado)).sort((a, b) => a.nivel - b.nivel)[0] || null; if (primera) primeraO = o; }
     }
     if (!pendientes) return { txt: (notas.length ? notas : ['obras: todo cumplido ✔']).join(' · '), pendientes: false };
     // cada salida con algo pendiente: si hay PRIORIDAD, anota la reserva para las tropas
@@ -1866,6 +1878,11 @@
       else delete ctx.espera[did];
       return { txt: tt, pendientes: true, reserva };
     };
+    // "npc" en la orden: cuando el TOTAL de la aldea alcanza, NPC al costo exacto y la sube
+    if (!cand && primera && primeraO && primeraO.npc) {
+      const r = await obraNPCExacta(did, primera, ctx);
+      if (r) return cierre(notas.concat([r.txt]).join(' · '), !r.hecho);
+    }
     // "hero" en la línea de la aldea: lo que falta para la obra sale del héroe (antes que el NPC)
     if (!cand && primera && TB_LISTA.heroeEn(PLISTA, did) === true) {
       const r = await obraConHeroe(did, primera, ctx);
@@ -1899,6 +1916,194 @@
     const hecho = cand.nuevo ? '🏗 ' + cand.nombre + ' (nueva, casilla ' + cand.aid + ')' : '⬆ ' + cand.nombre + ' ' + cand.nivel + '→' + (cand.nivel + 1);
     log((cand.nuevo ? '🏗 ' + nombreDe(did) + ': construyo ' + cand.nombre + ' en la casilla ' + cand.aid : '⬆ ' + nombreDe(did) + ': ' + cand.nombre + ' ' + cand.nivel + '→' + (cand.nivel + 1)) + (ok ? ' ✔' : ' (pedido, no lo veo en la cola)'));
     return cierre(notas.concat([hecho + (ok ? ' ✔' : '')]).join(' · '), false);
+  }
+
+  /* pide la obra (botón verde de su página) y confirma que entró en la cola */
+  async function pedirObra(did, c, ctx, url, como) {
+    await dormir(azar(500, 1000));
+    const b2 = await traer(url);
+    const boton = botonMejorar(b2);
+    const destino = boton && !botonApagado(boton) && didDe(b2) === did ? urlDelBoton(boton) : '';
+    if (!destino) return { txt: c.nombre + ' sigue sin botón' + (como ? ' (' + como + ')' : ''), hecho: false };
+    await dormir(azar(500, 1100));
+    const rr = await traer(new URL(destino, location.origin + '/').href);
+    anotarPedido(ctx, did, c);
+    const ok = $$('.buildingList li', rr).some(li => normNombre(txt(li)).indexOf(normNombre(c.en || '')) >= 0);
+    log('⬆ ' + nombreDe(did) + ': ' + c.nombre + ' ' + c.nivel + '→' + (c.nivel + 1) + (como ? ' ' + como : '') + (ok ? ' ✔' : ' (pedido, no lo veo en la cola)'));
+    return { txt: '⬆ ' + c.nombre + ' ' + c.nivel + '→' + (c.nivel + 1) + (como ? ' ' + como : '') + (ok ? ' ✔' : ''), hecho: true };
+  }
+
+  /* NPC exacto para una obra con "npc" en la lista (pedido del 30/09, otra cuenta:
+     "NPC there for 1 Cropfield to 18 when the resources are enough"): con el
+     obrero libre y el TOTAL de la aldea alcanzando el costo, NPC al costo exacto
+     (lo que sobra va adonde haya más lugar) y la sube. Es una orden explícita: no
+     usa el tope diario del panel, pero para si no hay oro y hace como mucho un
+     NPC cada 10 min por aldea. → { txt, hecho } o null (no aplica) */
+  async function obraNPCExacta(did, c, ctx) {
+    const url = c.campo ? urlSlot(did, c.id) : urlEdificio(did, c.aid, c.gid);
+    await dormir(azar(300, 700));
+    const b = await traer(url);
+    if (didDe(b) !== did) return null;
+    const up = $('.upgradeBuilding', b) || $('#build', b) || b;
+    if (!RX_FALTA_REC.test(txt($('.errorMessage', up)))) return null;   // obrero ocupado u otra cosa
+    const costo = costoDe(up);
+    const st = leerStock(b);
+    if (!suma(costo) || !st.capW || !st.capG) return null;
+    const cap = i => i === 3 ? st.capG : st.capW;
+    const que = c.nombre + ' ' + c.nivel + '→' + (c.nivel + 1);
+    if (costo.some((x, i) => x > cap(i))) return { txt: que + ': hace falta más depósito (' + fmtRec(costo) + ')', hecho: false };
+    const total = suma(st.cur) - 60;
+    if (total < suma(costo)) return { txt: que + ': para el NPC faltan ' + miles(suma(costo) - total) + ' en total', hecho: false };
+    const clave = 'tb_lnpcx_' + did;
+    if (ahora() - num(ss.get(clave)) < 600000) return null;
+    if (!(await npcPermitido(true))) return { txt: que + ': sin oro para el NPC', hecho: false };
+    const d = costo.slice();
+    let resto = total - suma(d);
+    for (let k = 0; k < 4 && resto > 0; k++) {
+      const i = [0, 1, 2, 3].sort((p, q) => (cap(q) - d[q]) - (cap(p) - d[p]))[0];
+      const n = Math.min(resto, cap(i) - d[i]);
+      if (n <= 0) break;
+      d[i] += n; resto -= n;
+    }
+    ss.set(clave, String(ahora()));
+    const r = await npcTrade(did, d);
+    if (!r.ok) { log('NPC en ' + nombreDe(did) + ' falló: ' + r.m); return { txt: 'NPC falló: ' + r.m.slice(0, 60), hecho: false }; }
+    log('💱 NPC en ' + nombreDe(did) + ' para ' + que + ': ' + fmtRec(d) + ' (3 oro)');
+    return pedirObra(did, c, ctx, url, 'con NPC');
+  }
+
+  /* ═ abastecer (pedido del 30/09, otra cuenta) ═
+     "10: supply 2": cuando el granero de 10 llega al 95 %, NPC en 10 a ⅓ madera,
+     ⅓ barro, ⅓ hierro (el cereal a 0: "no es necesario dejar cereal") y después
+     le manda a 2, con comerciantes, SÓLO lo que le falta para su próxima obra (el
+     total: 2 hace su propio NPC al costo exacto con "npc"), sin pasarse de lo que
+     entra en el depósito de 2 ni de lo que llevan los comerciantes (20 × 24.000 =
+     480.000). El envío sale de la aldea ACTIVA: antes de mandar se verifica por
+     GraphQL que la activa sea la que abastece; si no, no manda nada.
+     API (main.js del juego, 30/09): PUT + POST /api/v1/marketplace/resources/send
+     { action: 'marketPlace', resources: { lumber, clay, iron, crop },
+       destination: { x, y }, runs: 1, useTradeShips: false }, x-nonce como el NPC. */
+  const TOPE_COMERCIANTES = 480000;
+  async function gql(query) {
+    const r = await fetch(location.origin + '/api/v1/graphql', { method: 'POST', credentials: 'include', headers: API_JSON, body: JSON.stringify({ query }) });
+    if (!r.ok) throw new Error('graphql HTTP ' + r.status);
+    const j = await r.json();
+    if (j.errors) throw new Error('graphql: ' + JSON.stringify(j.errors).slice(0, 120));
+    return j.data;
+  }
+  function enCamino(dest) {
+    const l = ss.json('tb_lenvios', []).filter(e => ahora() < e.llega);
+    ss.set('tb_lenvios', JSON.stringify(l));
+    return suma(l.filter(e => e.a === dest).map(e => e.total));
+  }
+  /* la próxima obra de la lista del destino y su costo → { costo, st, nombre, nivel } o { txt } */
+  async function proximaObra(dest) {
+    const ords = ((PLISTA && PLISTA.porAldea[dest]) || { ordenes: [] }).ordenes.filter(o => o.tipo === 'campos' || o.tipo === 'edificio');
+    if (!ords.length) return { txt: 'no tiene obras en la lista' };
+    const d1 = await traer(urlDorf1(dest));
+    if (didDe(d1) !== dest) return { txt: 'no pude entrar' };
+    let slots = null;
+    for (const o of ords) {
+      let x = null;
+      if (o.tipo === 'campos') {
+        let cs = leerCampos(d1).filter(f => o.tipos.indexOf(f.gid) >= 0);
+        if (o.uno) cs = cs.sort((a, b) => b.nivel - a.nivel || a.id - b.id).slice(0, 1);
+        const f = cs.filter(f2 => f2.nivel < o.max && !/maxLevel/.test(f2.estado)).sort((a, b) => a.nivel - b.nivel)[0];
+        if (f) x = { url: urlSlot(dest, f.id), nombre: RECURSO[f.gid], nivel: f.nivel };
+      } else {
+        if (!slots) {
+          await dormir(azar(300, 700));
+          const d2 = await traer(urlDorf2(dest));
+          if (didDe(d2) !== dest) return { txt: 'no pude entrar' };
+          slots = leerSlotsDorf2(d2);
+        }
+        const gidO = o.gid || ((slots.find(s => s.aid === 40 && TB_LISTA.GIDS_MURALLA.indexOf(s.gid) >= 0) || {}).gid) || 0;
+        const s = slots.filter(s2 => s2.gid === gidO && s2.nivel < o.max && !/maxLevel/.test(s2.estado)).sort((a, b) => a.nivel - b.nivel)[0];
+        if (s) x = { url: urlEdificio(dest, s.aid, s.gid), nombre: TB_LISTA.NOMBRE_ES[s.gid] || s.nombre, nivel: s.nivel };
+      }
+      if (!x) continue;
+      await dormir(azar(300, 700));
+      const b = await traer(x.url);
+      if (didDe(b) !== dest) return { txt: 'no pude entrar' };
+      const costo = costoDe($('.upgradeBuilding', b) || $('#build', b) || b);
+      if (!suma(costo)) return { txt: x.nombre + ': no leo el costo' };
+      return { costo, st: leerStock(b), nombre: x.nombre, nivel: x.nivel };
+    }
+    return { txt: 'sus obras ya están cumplidas' };
+  }
+  async function abastecer(did, o, ctx) {
+    const dest = o.destino, aQuien = o.destinoNombre || o.a;
+    if (!dest || dest === did) return null;
+    // 1 · el granero de esta aldea
+    let d = await traer(urlDorf1(did));
+    if (didDe(d) !== did) return '🚚 no pude entrar';
+    let st = leerStock(d);
+    if (!st.capG || !st.capW) return '🚚 no leo el depósito';
+    const pct = Math.floor(st.cur[3] * 100 / st.capG);
+    if (pct < o.granero) return '🌾 granero ' + pct + ' % (NPC y envío a ' + aQuien + ' desde ' + o.granero + ' %)';
+    const partes = [];
+    // 2 · NPC: ⅓ madera, ⅓ barro, ⅓ hierro (lo que no entre en el almacén queda como cereal)
+    const clave = 'tb_lnpca_' + did;
+    if (ahora() - num(ss.get(clave)) >= 600000 && await npcPermitido(true)) {
+      const total = suma(st.cur) - 60;
+      const a = Math.max(0, Math.min(st.capW, Math.floor(total / 3)));
+      const des = [a, a, a, Math.max(0, total - 3 * a)];
+      ss.set(clave, String(ahora()));
+      const r = await npcTrade(did, des);
+      if (!r.ok) { log('NPC en ' + nombreDe(did) + ' falló: ' + r.m); return '💱 NPC falló: ' + r.m.slice(0, 60); }
+      partes.push('💱 NPC ' + fmtRec(des));
+      log('💱 NPC en ' + nombreDe(did) + ' (granero al ' + pct + ' %): ' + fmtRec(des) + ' (3 oro)');
+    }
+    // 3 · qué le falta al destino para su próxima obra
+    await dormir(azar(400, 900));
+    const ob = await proximaObra(dest);
+    if (!ob.costo) return partes.concat(['🚚 ' + aQuien + ': ' + ob.txt]).join(' · ');
+    const queOb = ob.nombre + ' ' + ob.nivel + '→' + (ob.nivel + 1);
+    const yaVa = enCamino(dest);
+    const falta = suma(ob.costo) - suma(ob.st.cur) - yaVa + 300;   // margen: el NPC de allá se guarda 60
+    if (falta <= 300) return partes.concat(['🚚 ' + aQuien + ' ya tiene lo de ' + queOb + (yaVa ? ' (con ' + miles(yaVa) + ' en camino)' : '')]).join(' · ');
+    // 4 · de vuelta en esta aldea (el envío sale de la ACTIVA)
+    await dormir(azar(400, 900));
+    d = await traer(urlDorf1(did));
+    if (didDe(d) !== did) return partes.concat(['🚚 no pude volver a ' + nombreDe(did)]).join(' · ');
+    st = leerStock(d);
+    const g = await gql('query{ownPlayer{village{id marketplace{merchantsInfo{capacity available}}}villages{id x y}}}');
+    const pv = g && g.ownPlayer;
+    if (!pv || !pv.village || String(pv.village.id) !== String(did)) return partes.concat(['🚚 la aldea activa no es ' + nombreDe(did) + ': no mando nada']).join(' · ');
+    const mi = (pv.village.marketplace && pv.village.marketplace.merchantsInfo) || {};
+    const lleva = Math.min(TOPE_COMERCIANTES, num(mi.capacity) * num(mi.available));
+    const xy = (pv.villages || []).find(v => String(v.id) === String(dest));
+    if (!xy) return partes.concat(['🚚 no encuentro dónde queda ' + aQuien]).join(' · ');
+    if (lleva < 100) return partes.concat(['🚚 sin comerciantes libres']).join(' · ');
+    // 5 · cuánto de cada uno: lo que hay acá, lo que entra allá (sin desbordar), lo que llevan los comerciantes
+    const lim = [0, 1, 2].map(i => Math.max(0, Math.min(st.cur[i], ob.st.capW - ob.st.cur[i] - Math.ceil(yaVa / 3))));
+    const quiero = Math.min(falta, lleva, suma(lim));
+    const s = [0, 0, 0];
+    const orden = [0, 1, 2].sort((p, q) => lim[p] - lim[q]);
+    let resta = quiero;
+    orden.forEach((i, k) => { const n = Math.min(lim[i], Math.floor(resta / (3 - k))); s[i] = n; resta -= n; });
+    orden.slice().reverse().forEach(i => { const n = Math.min(resta, lim[i] - s[i]); if (n > 0) { s[i] += n; resta -= n; } });
+    if (suma(s) < 100) return partes.concat(['🚚 ' + aQuien + ': no hay qué mandar (o no le entra)']).join(' · ');
+    // 6 · mandar
+    const body = JSON.stringify({ action: 'marketPlace', resources: { lumber: s[0], clay: s[1], iron: s[2], crop: 0 }, destination: { x: xy.x, y: xy.y }, runs: 1, useTradeShips: false });
+    const url = location.origin + '/api/v1/marketplace/resources/send';
+    await dormir(azar(400, 900));
+    const r1 = await fetch(url, { method: 'PUT', credentials: 'include', headers: API_JSON, body });
+    const nonce = r1.headers.get('x-nonce');
+    const t1 = await r1.text();
+    if (!r1.ok || !nonce) { log('🚚 ' + nombreDe(did) + ' → ' + aQuien + ': el juego no dejó preparar el envío (HTTP ' + r1.status + ' ' + t1.slice(0, 120) + ')'); return partes.concat(['🚚 el juego no dejó preparar el envío']).join(' · '); }
+    let dur = 0;
+    try { dur = num(JSON.parse(t1).duration); } catch (e) {}
+    await dormir(azar(400, 900));
+    const r2 = await fetch(url, { method: 'POST', credentials: 'include', headers: Object.assign({ 'X-Nonce': nonce }, API_JSON), body });
+    const t2 = await r2.text();
+    if (!r2.ok || /"error"/.test(t2)) { log('🚚 ' + nombreDe(did) + ' → ' + aQuien + ': el envío falló (HTTP ' + r2.status + ' ' + t2.slice(0, 120) + ')'); return partes.concat(['🚚 el envío falló']).join(' · '); }
+    const l = ss.json('tb_lenvios', []);
+    l.push({ a: dest, total: suma(s), llega: ahora() + Math.min(dur > 0 ? dur : 900, 7200) * 1000 + 60000 });
+    ss.set('tb_lenvios', JSON.stringify(l));
+    const envio = fmtRec(s.concat([0]));
+    log('🚚 ' + nombreDe(did) + ' → ' + aQuien + ': ' + envio + ' para ' + queOb + (dur ? ' (llega en ' + fmtCola(dur) + ')' : '') + (suma(s) + 300 < falta ? ' — no alcanza para todo: ' + (quiero === lleva ? 'comerciantes' : 'lugar o recursos') : ''));
+    return partes.concat(['🚚 → ' + aQuien + ': ' + envio + ' para ' + queOb]).join(' · ');
   }
 
   /* obra con los recursos del héroe (pedido del 30/09, otra cuenta: "Don't use
@@ -2016,7 +2221,7 @@
       ctx.cereal[did] = '🌾 ' + pct + '% (se vacía en ' + fmtCola(vacio) + ')';
       if (pct > RESCATE_DISPARO && !(vacio && vacio <= RESCATE_SEG)) continue;
       try { ctx.cereal[did] = await rescatarCereal(did, pct, vacio); }
-      catch (e) { if (e && e.parar) throw e; log('cereal de ' + nombreDe(did) + ': ' + (e && e.message ? e.message : e)); }
+      catch (e) { if (e && (e.parar || e.otraCuenta)) throw e; log('cereal de ' + nombreDe(did) + ': ' + (e && e.message ? e.message : e)); }
     }
   }
   async function rescatarCereal(did, pct, vacio) {
@@ -2063,7 +2268,9 @@
         }
       }
       // sin el NPC tildado no se gasta oro, ni siquiera en el rescate
-      if (CFG.lista.npc === false) partes.push('sin NPC (apagado en el panel)');
+      // el NPC del rescate tiene su ajuste (rescateNpc); si no está, sigue al tilde del NPC
+      const npcRescate = typeof CFG.lista.rescateNpc === 'boolean' ? CFG.lista.rescateNpc : CFG.lista.npc !== false;
+      if (!npcRescate) partes.push('sin NPC (apagado en el panel)');
       else if (await npcPermitido(true)) {
         const total = suma(st.cur) - 60;
         const cereal = Math.min(objetivo, st.capG, total);
@@ -2182,7 +2389,7 @@
       }
       // 0b · rescate de cereal: lo primero (si una aldea roja llega al 5 %, se mueren las tropas)
       try { await rescateCereal(ctx); }
-      catch (e) { if (e && e.parar) throw e; log('cereal: ' + (e && e.message ? e.message : e)); }
+      catch (e) { if (e && (e.parar || e.otraCuenta)) throw e; log('cereal: ' + (e && e.message ? e.message : e)); }
       // 1 · colas de entrenamiento de todas las aldeas (una página)
       const conTropas = dids.filter(d => P.porAldea[d].ordenes.some(o => o.tipo === 'tropas'));
       let colas = null;
@@ -2200,6 +2407,9 @@
              1 % o menos: NO entrena (cada tropa nueva come más cereal). Arriba
              del 1 % las rojas entrenan igual (pedido del 29/09; el rescate ya
              sube el granero al 15 % cuando baja del 5 %). */
+          // "supply X": granero lleno → NPC → manda a X lo que le falta (antes que las obras propias)
+          const ab = ord.find(o => o.tipo === 'abastecer');
+          if (ab) sumar(did, await abastecer(did, ab, ctx));
           const roja = ctx.rojas[did] != null && ctx.rojas[did] <= 1;
           const tieneTropas = ord.some(o => o.tipo === 'tropas');
           if (roja && tieneTropas) sumar(did, 'tropas en pausa: cereal al ' + ctx.rojas[did] + '%');
@@ -2217,7 +2427,7 @@
           if (ord.some(o => o.tipo === 'hospital')) sumar(did, await curarHospital(did));
           if (!caballos && !roja) sumar(did, await tropasLista(did, ord, colas, H, 'resto', !(obra && obra.pendientes), reserva));
         } catch (e) {
-          if (e && e.parar) throw e;
+          if (e && (e.parar || e.otraCuenta)) throw e;
           // un pedido que falla (red, PC cargada) no corta la vuelta: sigo con la próxima aldea
           sumar(did, '⚠ ' + (e && e.message ? e.message : e));
           log('TO DO · ' + nombreDe(did) + ': ' + (e && e.message ? e.message : e));
@@ -2228,6 +2438,11 @@
       await fiestasLista(P, ctx);
     } catch (e) {
       if (e && e.parar) { cancelarRecarga(); await bg({ tipo: 'alarma', m: e.parar }); marcar('⛔ ' + e.message, false, 0); return; }
+      if (e && e.otraCuenta) {   // no hace nada con la sesión de otra cuenta: vuelve a mirar en 1 min
+        const ms = await programarEn(ahora() + 60000);
+        estado({ txt: '⏸ la sesión es de otra cuenta: espero', next: ahora() + ms });
+        return;
+      }
       log('TO DO: ' + (e && e.message ? e.message : e));
     }
     Object.keys(ctx.cereal).forEach(did => { if (ctx.cereal[did]) sumar(did, ctx.cereal[did]); });
@@ -2305,6 +2520,20 @@
     CFG = info.cfg; INFO = info;
     // las aldeas salen del recuadro de la derecha: nuevas entran, perdidas salen
     if (!aldeasMiradas) { aldeasMiradas = true; try { await sincronizarAldeas(document); } catch (e) {} }
+    // sesión de OTRA cuenta: ni tropas, ni obras, ni héroe (salvo que el usuario esté escaneando para cambiar de cuenta)
+    if (CAMBIO_CUENTA) {   // perfil de otra cuenta recién cargado: empiezo de nuevo con sus ajustes
+      if (!bannerEl) crearBanner();
+      const ms = await programarEn(ahora() + 8000);
+      estado({ txt: '🔁 cambié de cuenta', next: ahora() + ms });
+      return;
+    }
+    if (OTRA_CUENTA && !(info.scan && info.scan.activo)) {
+      if (!bannerEl) crearBanner();
+      const ms = await programarEn(ahora() + 60000);
+      estado({ txt: '⏸ la sesión es de otra cuenta: espero', next: ahora() + ms });
+      marcar('⏸ otra cuenta', true, ahora() + ms);
+      return;
+    }
 
     if (!bannerEl) crearBanner();
 

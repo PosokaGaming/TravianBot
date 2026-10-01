@@ -62,7 +62,7 @@ var TB_LISTA = (function () {
     1: ['madera', 'lenador', 'woodcutter', 'wood', 'lumber'],
     2: ['barro', 'barrera', 'arcilla', 'clay', 'clay pit'],
     3: ['hierro', 'mina de hierro', 'mina', 'iron', 'iron mine'],
-    4: ['cereal', 'granja', 'trigo', 'crop', 'cropland'],
+    4: ['cereal', 'granja', 'trigo', 'crop', 'cropland', 'cropfield', 'crop field', 'campo de cereal', 'campos de cereal'],
   };
 
   /* ── tropas: alias en castellano → nombre del servidor (inglés). Una lista =
@@ -126,10 +126,30 @@ var TB_LISTA = (function () {
     let t = norm(crudo);
     const mp = t.match(RX_PRIO) || t.match(RX_PRIO_FIN);
     if (mp) { prio = true; t = t.replace(mp[0], '').trim(); }
-    const o = ordenSuelta(t, texto);
+    /* "npc" en una obra (pedido del 30/09, otra cuenta: "NPC there for 1 Cropfield
+       to 18 when the resources are enough"): cuando el TOTAL de la aldea alcanza,
+       NPC al costo exacto y la sube. "1 crop 18" = UN solo campo (el más alto). */
+    let npc = false;
+    if (RX_NPC.test(t)) { npc = true; t = t.replace(RX_NPC_G, ' ').replace(/\s+/g, ' ').trim(); }
+    let o = null;
+    const mu = t.match(/^(?:1|one|un|una|uno|single)\s+(.+)$/);
+    if (mu) { const ou = ordenSuelta(mu[1], texto); if (ou && ou.tipo === 'campos') { ou.uno = true; o = ou; } }
+    if (!o) o = ordenSuelta(t, texto);
     if (o && prio && (o.tipo === 'edificio' || o.tipo === 'campos')) o.prio = true;
+    if (npc && !o) return { error: '"npc" sólo va con una obra o un campo ("' + texto.trim() + '")' };
+    if (o && npc) {
+      if (o.tipo === 'edificio' || o.tipo === 'campos') o.npc = true;
+      else if (!o.error) return { error: '"npc" sólo va con una obra o un campo ("' + texto.trim() + '")' };
+    }
     return o;
   }
+  const RX_NPC = /(^|\s)(?:(?:con|with)\s+)?npc(?=\s|$)/;
+  const RX_NPC_G = /(^|\s)(?:(?:con|with)\s+)?npc(?=\s|$)/g;
+  /* abastecer (pedido del 30/09, otra cuenta): "supply 2" en la línea de la aldea
+     10 = cuando SU granero llega al 95 % (o "supply 2 at 90"), NPC a 1/3 madera,
+     1/3 barro, 1/3 hierro y le manda a 2, con comerciantes, sólo lo que le falta
+     para su próxima obra (sin desbordar su depósito). */
+  const RX_ABASTECER = /^(?:supply|abastecer|feed|alimentar|send to|send|enviar a|enviar|mandar a|mandar)\s+(.+?)(?:\s+(?:at|al|a|desde|from)\s+(\d{1,3}))?$/;
 
   /* una orden suelta (ya normalizada) → objeto, o { error } */
   function ordenSuelta(t, texto) {
@@ -140,6 +160,12 @@ var TB_LISTA = (function () {
     if (/^nada$|^nothing$/.test(t)) return { tipo: 'nada', txt: texto.trim() };
     if (RX_HEROE_NO.test(t)) return { tipo: 'heroe', si: false, txt: texto.trim() };
     if (RX_HEROE.test(t)) return { tipo: 'heroe', si: true, txt: texto.trim() };
+    const ab = t.match(RX_ABASTECER);
+    if (ab) {
+      const pct = ab[2] ? parseInt(ab[2], 10) : 95;
+      if (pct < 10 || pct > 100) return { error: 'el granero va de 10 a 100 % ("' + texto.trim() + '")' };
+      return { tipo: 'abastecer', a: ab[1].trim(), granero: pct, txt: texto.trim() };
+    }
 
     const esTropa = PAL_TROPAS.test(t);
     if (!esTropa) {
@@ -220,6 +246,12 @@ var TB_LISTA = (function () {
         const o = orden(pedazo);
         if (!o) return;
         if (o.error) { errores.push({ linea: i + 1, msg: o.error }); return; }
+        if (o.tipo === 'abastecer') {   // la aldea destino se resuelve acá (tiene que ser UNA)
+          const r = buscarAldea(o.a, aldeas);
+          if (r.length !== 1) { errores.push({ linea: i + 1, msg: 'no conozco la aldea destino "' + o.a + '"' }); return; }
+          o.destino = r[0];
+          o.destinoNombre = (aldeas.find(a => String(a.did) === r[0]) || {}).nombre || o.a;
+        }
         if (general) o.general = true;
         actuales.forEach(did => {
           const a = porAldea[did] = porAldea[did] || { ordenes: [] };
@@ -235,13 +267,14 @@ var TB_LISTA = (function () {
   const titulo = s => s.replace(/\b[a-z]/g, c => c.toUpperCase());
   /* cómo se entendió una orden (para el panel) */
   function describir(o) {
-    return (o.prio ? '⚑ PRIORIDAD · ' : '') + describirBase(o);
+    return (o.prio ? '⚑ PRIORIDAD · ' : '') + describirBase(o) + (o.npc ? ' (con NPC cuando el total alcanza)' : '');
   }
   function describirBase(o) {
     if (o.tipo === 'campos') {
       const que = o.tipos.length === 4 ? 'campos' : o.tipos.map(k => ({ 1: 'madera', 2: 'barro', 3: 'hierro', 4: 'cereal' }[k])).join('+');
-      return que + (o.max >= 99 ? ' hasta el máximo' : ' → ' + o.max);
+      return (o.uno ? 'UN campo de ' : '') + que + (o.uno ? ' (el más alto)' : '') + (o.max >= 99 ? ' hasta el máximo' : ' → ' + o.max);
     }
+    if (o.tipo === 'abastecer') return 'granero ≥' + o.granero + ' % → NPC a ⅓ madera/barro/hierro → manda a ' + (o.destinoNombre || o.a) + ' lo que le falta';
     if (o.tipo === 'edificio') return (o.gid ? NOMBRE_ES[o.gid] : 'Muralla') + ' → ' + o.max;
     if (o.tipo === 'tropas') return 'tropas: ' + o.grupos.map(g => g.map(titulo).join(' / ')).join(' + ');
     if (o.tipo === 'hospital') return 'curar el hospital';

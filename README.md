@@ -93,6 +93,9 @@ todas: fiestas                      # grande si se puede, si no chica
 | `cereal` | sólo campos de cereal (lo mismo `madera`, `barro`, `hierro`) |
 | `tropas A + B` | entrena sin parar; `A/B` = A, y si no está investigada, B |
 | `hospital` | cura a los heridos con lo que alcance |
+| `1 crop 18` · `un cereal 18` | UN solo campo (el de nivel más alto) hasta ese nivel |
+| `… npc` (ej. `1 crop 18 npc`) | cuando el TOTAL de la aldea alcanza el costo, NPC al costo exacto y la sube (no usa el tope diario; 1 NPC cada 10 min como mucho) |
+| `supply 2` · `abastecer 2` (`supply 2 at 90`) | cuando el granero de ESTA aldea llega al 95 %: NPC a ⅓ madera, ⅓ barro, ⅓ hierro y le manda a 2, con comerciantes, sólo lo que le falta para su próxima obra (sin desbordar su depósito, tope 480.000) |
 | `hero` · `no hero` | esa aldea usa los recursos del héroe, **también para obras** (si a la obra le falta y el héroe tiene todo lo que falta) · nunca. Si alguna aldea tiene `hero`, las demás no los usan (ni para el establo ni para el rescate de cereal). Sin `hero` en la lista, decide el tilde del panel |
 | `fiestas` / `fiestas chicas` | fiesta grande donde el ayuntamiento y los recursos lo permitan, si no chica |
 | `todas:` · `nada` · `#` | para todas las aldeas · esa aldea quieta · comentario |
@@ -153,6 +156,10 @@ la lista venía filtrada por un grupo).
 
 - Si aparece un captcha / control antibot, o la sesión se cierra, **se
   detiene** y lo avisa en el panel.
+- **Perfiles por cuenta.** El bot guarda ajustes, lista y aldeas de cada cuenta por separado. Si en el
+  mismo navegador entrás con otra cuenta que ya conoce, cambia solo a la configuración de esa cuenta
+  (y vuelve sola a la tuya). Una cuenta que no conoce no se toca: el bot espera (⏸). Para usarlo con
+  una cuenta nueva: 🔍 escanear aldeas.
 - **Pausa por página** (10 s de fábrica, en el panel): el bot no deja ninguna página antes de
   ese tiempo, así no salta de aldea en aldea y de edificio en edificio a toda velocidad. Los
   pedidos del TO DO LIST que no cambian de página no esperan.

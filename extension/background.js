@@ -223,9 +223,12 @@ function rolActivo(cfg, r) {
    a ser la lista (así se la puedo dejar escrita sin abrir el panel). La
    extensión sin empaquetar lee el archivo del disco en cada fetch. */
 async function importarArchivoLista() {
-  let t = '';
+  let t = '', f = 'todo.txt';
   try {
-    const r = await fetch(chrome.runtime.getURL('todo.txt'), { cache: 'no-store' });
+    // cada cuenta puede tener su archivo (perfiles por cuenta, 30/09): la primera, todo.txt
+    const c0 = (await get('tb_cfg', null)) || {};
+    if (esObjeto(c0.lista) && /^[\w.-]+\.txt$/.test(c0.lista.fichero || '')) f = c0.lista.fichero;
+    const r = await fetch(chrome.runtime.getURL(f), { cache: 'no-store' });
     if (!r.ok) return;
     t = (await r.text()).replace(/\r\n/g, '\n').trim();
   } catch (e) { return; }
@@ -236,7 +239,7 @@ async function importarArchivoLista() {
   c.lista = Object.assign({}, CFG_DEF.lista, l, { texto: t, archivo: t });
   await set('tb_cfg', c);
   const P = TB_LISTA.parsear(t, await get('tb_aldeas', []));
-  await log('TO DO: cargué la lista de todo.txt — ' + Object.keys(P.porAldea).length + ' aldea(s)' +
+  await log('TO DO: cargué la lista de ' + f + ' — ' + Object.keys(P.porAldea).length + ' aldea(s)' +
             (P.errores.length ? ', ⚠ ' + P.errores.map(e => 'línea ' + e.linea + ': ' + e.msg).join(' | ') : ''), 'lista');
 }
 // ¿necesita pestaña? la farm list por API sólo muestra su pestaña en MODO FARM o TODO
@@ -275,10 +278,46 @@ async function importarAjustes() {
   if (Number(a.npcMaxDia) >= 0 && a.npcMaxDia !== undefined) sub('lista', 'npcMaxDia', Number(a.npcMaxDia), 'máx. ' + Number(a.npcMaxDia) + ' NPC por día');
   if (Number(a.caballosHoras) > 0) sub('lista', 'caballosHoras', Number(a.caballosHoras), 'establo hasta ' + Number(a.caballosHoras) + ' h');
   if (['lista', 'tropas', 'farm', 'construccion', 'todo'].indexOf(a.modo) >= 0) { c.modo = a.modo; hechos.push('MODO ' + a.modo.toUpperCase()); }
+  if (typeof a.rescateNpc === 'boolean') sub('lista', 'rescateNpc', a.rescateNpc, 'NPC del rescate de cereal ' + (a.rescateNpc ? 'sí' : 'NO'));
+  /* "cuenta": { "nueva": true, … } (30/09): la PRÓXIMA cuenta desconocida que
+     aparezca en la sesión se adopta como perfil nuevo con estos ajustes (la de
+     antes queda guardada y vuelve sola cuando vuelva a aparecer) */
+  if (esObjeto(a.cuenta) && a.cuenta.nueva) {
+    const k = a.cuenta;
+    const cfgNueva = { modo: ['lista', 'tropas', 'farm', 'construccion', 'todo'].indexOf(k.modo) >= 0 ? k.modo : 'lista',
+                       farm: { on: k.farm === true }, heroe: { on: k.heroe === true },
+                       lista: { on: true, npc: k.npc === true, heroe: k.recursosHeroe !== false,
+                                rescateNpc: typeof k.rescateNpc === 'boolean' ? k.rescateNpc : null,
+                                fichero: /^[\w.-]+\.txt$/.test(k.fichero || '') ? k.fichero : 'todo.txt' } };
+    await set('tb_adoptar', { cfg: cfgNueva, t: Date.now() });
+    hechos.push('la próxima cuenta nueva se adopta (lista en ' + cfgNueva.lista.fichero + ')');
+  }
   await set('tb_cfg', c);
   await set('tb_ajustes_archivo', t);
   if (c.farm && c.farm.on === false) chrome.alarms.clear('tb_farm');
   await log('ajustes.json: ' + (hechos.join(' · ') || 'nada que cambiar'));
+  if (a.arrancar === true && !(await get('tb_run', false))) await arrancar();
+}
+
+/* ───────────── perfiles por cuenta (30/09) ─────────────
+   Todo lo que es de UNA cuenta (ajustes, lista, aldeas, edificios…) se guarda
+   aparte cuando en la sesión aparece otra cuenta que ya conozco (o que me
+   pidieron adoptar), y vuelve solo cuando vuelve la cuenta. tb_run, el log y
+   las pestañas son de la extensión, no de la cuenta. */
+const CLAVES_CUENTA = ['tb_cfg', 'tb_aldeas', 'tb_edificios', 'tb_unidades', 'tb_herreria', 'tb_nextu',
+                       'tb_cuenta', 'tb_lista_estado', 'tb_npc', 'tb_scan', 'tb_rot'];
+const borrar = async k => { CACHE.set(k, undefined); try { await chrome.storage.local.remove(k); } catch (e) {} };
+async function perfilActual(cuenta) {
+  const p = {};
+  for (const k of CLAVES_CUENTA) p[k] = await get(k);
+  if (cuenta && cuenta.length) p.tb_cuenta = cuenta.map(String);
+  return p;
+}
+async function cargarPerfil(p) {
+  for (const k of CLAVES_CUENTA) {
+    if (p && p[k] !== undefined && p[k] !== null) await set(k, p[k]);
+    else await borrar(k);
+  }
 }
 
 async function vigilar() {
@@ -370,6 +409,13 @@ async function farmPorApi() {
       return;
     }
     if (h.indexOf('villageInput') < 0) { await log('farm: la página no trae la sesión (HTTP ' + r.status + '), reintento', 'farm'); reintento = true; return; }
+    // ¿la sesión es de la cuenta del bot? (si entraste con otra cuenta en este perfil, no le mando SUS listas)
+    const cuenta = new Set(((await get('tb_cuenta', null)) || Object.keys((await get('tb_edificios', {})) || {})).map(String));
+    const enPagina = (h.match(/data-did="(\d+)"/g) || []).map(x => x.replace(/\D/g, ''));
+    if (cuenta.size && enPagina.length && !enPagina.some(d => cuenta.has(d))) {
+      await set('tb_estado_farm', { t: Date.now(), txt: 'otra cuenta en la sesión: espero' });
+      return;
+    }
     const k = h.indexOf('viewData:');
     const vd = k >= 0 ? objetoJSON(h, k) : null;
     const listas = vd && vd.ownPlayer && vd.ownPlayer.farmLists;
@@ -573,6 +619,8 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
           };
         });
         await set('tb_aldeas', Object.values(porDid));
+        // el escaneo (lo pide el usuario, o la primera vez) define de qué CUENTA es el bot
+        if ((msg.aldeas || []).length) await set('tb_cuenta', msg.aldeas.map(a => String(a.did)));
         responder({ ok: true });
         break;
       }
@@ -580,14 +628,57 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
          salen las que ya no están. Si faltan más de 2 de golpe no borro nada:
          la lista podía venir filtrada por un grupo. */
       case 'aldeasSync': {
-        const viejas = await get('tb_aldeas', []);
+        let viejas = await get('tb_aldeas', []);
+        const nuevasIds = (msg.aldeas || []).filter(a => a && a.did).map(a => String(a.did));
+        if (!nuevasIds.length) { responder({ ok: false, aldeas: viejas }); break; }
+        /* ¿es la MISMA cuenta? (30/09: el usuario entró con otra cuenta del mismo
+           servidor en este perfil y el bot siguió trabajando con esa sesión y
+           sumó sus 16 aldeas a las mías). La cuenta = sus aldeas (tb_cuenta, la
+           arma el escaneo; si no hay, lo escaneado o esta misma lista). Si la
+           página no comparte NINGUNA aldea con la cuenta, es otra: no se mezcla
+           y el bot espera. Para cambiar de cuenta a propósito: escanear aldeas. */
+        let cuenta = await get('tb_cuenta', null);
+        if (!Array.isArray(cuenta) || !cuenta.length) {
+          const esc = Object.keys((await get('tb_edificios', {})) || {});
+          cuenta = esc.length ? esc : nuevasIds;
+        }
+        const enCuenta = new Set(cuenta.map(String));
+        if (!nuevasIds.some(d => enCuenta.has(d))) {
+          /* ¿una cuenta que ya conozco, o una que me pidieron adoptar? → cambio de
+             perfil: guardo el de la cuenta que se va y cargo el de la que vino */
+          const perfiles = ((await get('tb_perfiles', [])) || []).filter(p => p && Array.isArray(p.tb_cuenta));
+          const j = perfiles.findIndex(p => p.tb_cuenta.some(d => nuevasIds.indexOf(String(d)) >= 0));
+          const adoptar = await get('tb_adoptar', null);
+          if (j >= 0 || adoptar) {
+            const saliente = await perfilActual(cuenta);
+            const resto = perfiles.filter((p, k) => k !== j).concat([saliente]);
+            const entrante = j >= 0 ? perfiles[j] : {
+              tb_cfg: adoptar.cfg || null, tb_cuenta: nuevasIds,
+              tb_aldeas: (msg.aldeas || []).filter(a => a && a.did).map(a => ({ did: String(a.did), nombre: a.nombre || ('aldea ' + a.did), tribu: 0 })),
+            };
+            await set('tb_perfiles', resto);
+            await cargarPerfil(entrante);
+            await borrar('tb_adoptar');
+            await set('tb_otra_cuenta', false);
+            const nombres = (l, ids) => { const v = (l || []).filter(a => !ids || ids.indexOf(String(a.did)) >= 0); return v.map(a => a.nombre).slice(0, 6).join(', ') + (v.length > 6 ? '…' : ''); };
+            await log('🔁 cambio de cuenta: guardé la de ' + nombres(saliente.tb_aldeas, saliente.tb_cuenta) + ' y ' + (j >= 0 ? 'volví a' : 'adopté') + ' la de ' + nombres(entrante.tb_aldeas, entrante.tb_cuenta));
+            responder({ ok: false, cambioCuenta: true, aldeas: await get('tb_aldeas', []) });
+            break;
+          }
+          if (!(await get('tb_otra_cuenta', false))) { await set('tb_otra_cuenta', true); await log('⚠ esta sesión es de OTRA cuenta (sus aldeas no son las del bot): no hago nada hasta que vuelva la cuenta de siempre. Si cambiaste de cuenta a propósito: 🔍 escanear aldeas'); }
+          responder({ ok: false, otraCuenta: true, aldeas: viejas });
+          break;
+        }
+        if (await get('tb_otra_cuenta', false)) { await set('tb_otra_cuenta', false); await log('volvió la cuenta de siempre: sigo'); }
+        // las aldeas guardadas que no son de la cuenta (las que se mezclaron de otra) se van
+        const ajenas = viejas.filter(a => !enCuenta.has(String(a.did)) && nuevasIds.indexOf(String(a.did)) < 0);
+        if (ajenas.length) { viejas = viejas.filter(a => ajenas.indexOf(a) < 0); await log('aldeas: saqué ' + ajenas.length + ' de otra cuenta (' + ajenas.map(a => a.nombre).join(', ') + ')'); }
         const porDid = {};
         viejas.forEach(a => { porDid[String(a.did)] = a; });
         const nuevas = (msg.aldeas || []).filter(a => a && a.did).map(a => {
           const v = porDid[String(a.did)];
           return { did: String(a.did), nombre: a.nombre || (v && v.nombre) || ('aldea ' + a.did), tribu: (v && v.tribu) || 0 };
         });
-        if (!nuevas.length) { responder({ ok: false, aldeas: viejas }); break; }
         const ids = new Set(nuevas.map(a => a.did));
         let fuera = viejas.filter(a => !ids.has(String(a.did)));
         const entran = nuevas.filter(a => !porDid[a.did]);
@@ -595,6 +686,7 @@ chrome.runtime.onMessage.addListener((msg, sender, responder) => {
         let lista = nuevas;
         if (fuera.length > 2) { lista = nuevas.concat(fuera); fuera = []; }
         await set('tb_aldeas', lista);
+        await set('tb_cuenta', lista.map(a => String(a.did)));
         const cambios = [
           entran.length ? 'nueva(s): ' + entran.map(a => a.nombre).join(', ') : '',
           fuera.length ? 'ya no está(n): ' + fuera.map(a => a.nombre).join(', ') : '',
@@ -755,7 +847,11 @@ chrome.runtime.onInstalled.addListener(d => enFila(async () => {
     await set('tb_cfg', c);
     await log('v' + v + ': MODO TO DO LIST — cada aldea hace sólo lo que dice la lista; la farm list sigue de fondo');
   }
-  if (!(await get('tb_run', false))) { await log('extensión actualizada a v' + v + ' (detenido)'); return; }
+  if (!(await get('tb_run', false))) {
+    await log('extensión actualizada a v' + v + ' (detenido)');
+    await importarAjustes();   // un ajustes.json nuevo puede pedir "arrancar" (y entonces arranca acá)
+    return;
+  }
   await log('extensión actualizada a v' + v + ' — sigo andando');
   chrome.alarms.create('tb_vigilar', { periodInMinutes: 1 });
   const m = await tabsMapa();

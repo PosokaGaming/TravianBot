@@ -147,6 +147,10 @@ const TB = (function () {
         return;
       }
       if (h.indexOf('villageInput') < 0) { log('farm: la página no trae la sesión (HTTP ' + r.status + '), reintento', 'farm'); reintento = true; return; }
+      // ¿la sesión es de la cuenta del bot? si no, no le mando SUS listas
+      const cuenta = new Set((get('tb_cuenta', null) || Object.keys(get('tb_edificios', {}) || {})).map(String));
+      const enPagina = (h.match(/data-did="(\d+)"/g) || []).map(x => x.replace(/\D/g, ''));
+      if (cuenta.size && enPagina.length && !enPagina.some(d => cuenta.has(d))) { set('tb_estado_farm', { t: Date.now(), txt: 'otra cuenta en la sesión: espero' }); return; }
       const k = h.indexOf('viewData:');
       const vd = k >= 0 ? objetoJSON(h, k) : null;
       const listas = vd && vd.ownPlayer && vd.ownPlayer.farmLists;
@@ -268,10 +272,25 @@ const TB = (function () {
           porDid[String(a.did)] = { did: String(a.did), nombre: (generico(a.nombre) && v && !generico(v.nombre)) ? v.nombre : a.nombre, tribu: a.tribu || (v && v.tribu) || 0 };
         });
         set('tb_aldeas', Object.values(porDid));
+        // el escaneo define de qué CUENTA es el bot
+        if ((msg.aldeas || []).length) set('tb_cuenta', msg.aldeas.map(a => String(a.did)));
         return { ok: true };
       }
       case 'aldeasSync': {   // la lista de la derecha: entran las nuevas, salen las perdidas (si faltan >2, no borro)
-        const viejas = get('tb_aldeas', []);
+        let viejas = get('tb_aldeas', []);
+        const nuevasIds = (msg.aldeas || []).filter(a => a && a.did).map(a => String(a.did));
+        if (!nuevasIds.length) return { ok: false, aldeas: viejas };
+        // ¿misma cuenta? (igual que en el service worker de la extensión)
+        let cuenta = get('tb_cuenta', null);
+        if (!Array.isArray(cuenta) || !cuenta.length) { const esc = Object.keys(get('tb_edificios', {}) || {}); cuenta = esc.length ? esc : nuevasIds; }
+        const enCuenta = new Set(cuenta.map(String));
+        if (!nuevasIds.some(d => enCuenta.has(d))) {
+          if (!get('tb_otra_cuenta', false)) { set('tb_otra_cuenta', true); log('⚠ esta sesión es de OTRA cuenta (sus aldeas no son las del bot): no hago nada hasta que vuelva la cuenta de siempre. Si cambiaste de cuenta a propósito: 🔍 escanear aldeas'); }
+          return { ok: false, otraCuenta: true, aldeas: viejas };
+        }
+        if (get('tb_otra_cuenta', false)) { set('tb_otra_cuenta', false); log('volvió la cuenta de siempre: sigo'); }
+        const ajenas = viejas.filter(a => !enCuenta.has(String(a.did)) && nuevasIds.indexOf(String(a.did)) < 0);
+        if (ajenas.length) { viejas = viejas.filter(a => ajenas.indexOf(a) < 0); log('aldeas: saqué ' + ajenas.length + ' de otra cuenta (' + ajenas.map(a => a.nombre).join(', ') + ')'); }
         const porDid = {};
         viejas.forEach(a => { porDid[String(a.did)] = a; });
         const nuevas = (msg.aldeas || []).filter(a => a && a.did).map(a => {
@@ -285,6 +304,7 @@ const TB = (function () {
         let lista = nuevas;
         if (fuera.length > 2) { lista = nuevas.concat(fuera); fuera = []; }
         set('tb_aldeas', lista);
+        set('tb_cuenta', lista.map(a => String(a.did)));
         const cambios = [entran.length ? 'nueva(s): ' + entran.map(a => a.nombre).join(', ') : '',
                          fuera.length ? 'ya no está(n): ' + fuera.map(a => a.nombre).join(', ') : ''].filter(Boolean).join(' · ');
         if (cambios) log('aldeas: ' + cambios);

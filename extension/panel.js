@@ -240,6 +240,7 @@ function cuerpoLista(cfg, aldeas) {
       `<b>tropas Mercenary + Marksman</b> · entrenar sin parar · <b>Marauder/Steppe Rider</b> = la primera que esté investigada<br>` +
       `<b>hospital</b> · curar a los heridos · <b>fiestas</b> · grande si se puede, si no chica · <b>fiestas chicas</b><br>` +
       `<b>hero</b> · esta aldea usa los recursos del héroe, también en obras (si alguna aldea lo tiene, las demás no los usan) · <b>no hero</b> · nunca<br>` +
+      `<b>1 crop 18</b> · UN solo campo (el más alto) · <b>… npc</b> · NPC al costo exacto cuando el total alcanza · <b>supply 2</b> · granero al 95 % → NPC ⅓ → manda a 2 lo que le falta<br>` +
       `<b>todas:</b> para todas las aldeas · <b>nada</b> · esa aldea quieta · <b>#</b> comentario` +
     `</div></details>` +
     `<label>caballos primero: el establo recibe los recursos hasta <input type="number" min="1" max="24" data-cfg="lista.caballosHoras" value="${c.caballosHoras || 2}" style="width:44px"> h de cola</label>` +
