@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TravianBot
 // @namespace    https://github.com/PosokaGaming/TravianBot
-// @version      5.9.0
+// @version      5.10.0
 // @description  Bot para Travian Legends: TO DO LIST por aldea, farm list, tropas por prioridad de cola, héroe y construcción, con modos. Una sola pestaña.
 // @author       TravianBot
 // @match        *://*.travian.com/*
@@ -221,6 +221,8 @@ var TB_LISTA = (function () {
     if (f) return { tipo: 'fiestas', grande: !f[1] && !/\b(chicas?|pequenas?|small|little)\b/.test(f[3]), txt: texto.trim() };
     if (RX_HOSP.test(t)) return { tipo: 'hospital', txt: texto.trim() };
     if (/^nada$|^nothing$/.test(t)) return { tipo: 'nada', txt: texto.trim() };
+    // "sin parar" (pedido del 30/09: "que construya en las dos últimas aldeas sin parar")
+    if (/^(sin parar|nonstop|non stop|no parar|continuo|rapido|rapida|fast)$/.test(t)) return { tipo: 'rapido', txt: texto.trim() };
     if (RX_HEROE_NO.test(t)) return { tipo: 'heroe', si: false, txt: texto.trim() };
     if (RX_HEROE.test(t)) return { tipo: 'heroe', si: true, txt: texto.trim() };
     const ab = t.match(RX_ABASTECER);
@@ -341,7 +343,8 @@ var TB_LISTA = (function () {
     if (o.tipo === 'edificio') return (o.gid ? NOMBRE_ES[o.gid] : 'Muralla') + ' → ' + o.max;
     if (o.tipo === 'tropas') return 'tropas: ' + o.grupos.map(g => g.map(titulo).join(' / ')).join(' + ');
     if (o.tipo === 'hospital') return 'curar el hospital';
-    if (o.tipo === 'heroe') return o.si ? 'usa los recursos del héroe (también en obras)' : 'sin recursos del héroe';
+    if (o.tipo === 'rapido') return 'sin parar: llena la cola de obras y la vuelve a mirar apenas se libera';
+    if (o.tipo === 'heroe') return o.si ?'usa los recursos del héroe (también en obras)' : 'sin recursos del héroe';
     if (o.tipo === 'fiestas') return o.grande ? 'fiesta grande (si no se puede, chica)' : 'fiestas chicas';
     return o.tipo;
   }
@@ -3215,6 +3218,9 @@ setInterval(tictac, 250);
     const slots = d2 ? leerSlotsDorf2(d2) : [];
     if (slots.length) { bg({ tipo: 'edificiosDe', did, slots }); if (INFO.edificios) INFO.edificios[did] = slots; }
     const enObra = $$('.buildingList li', d1 || d2).length;
+    // "sin parar": cuándo termina la primera obra de la cola (s), para volver a mirar justo ahí
+    const libreEn = Math.min.apply(null, [99999].concat($$('.buildingList .timer', d1 || d2).map(x => num(x.getAttribute('value')) || segDe(txt(x))).filter(v => v > 0)));
+    const rapida = !!(ctx.rapidas && ctx.rapidas.has(did));
     let pendientes = 0, cand = null, primera = null, primeraO = null, prioX = null;
     const notas = [];
     const vacias = slots.filter(CASILLA_LIBRE);
@@ -3256,7 +3262,9 @@ setInterval(tictac, 250);
     const cierre = async (t, esperar) => {
       const reserva = prioX ? await reservaPrio(did, prioX) : null;
       const tt = reserva ? t + ' · 🔒 reservo ' + fmtRec(reserva.costo) + ' para ' + reserva.para : t;
-      if (esperar) ctx.espera[did] = { t: ahora() + azar(120000, 180000), txt: tt, reserva };
+      const espera = !rapida ? azar(120000, 180000)
+        : Math.max(8000, Math.min(60000, libreEn < 99999 && /obrero/.test(t) ? libreEn * 1000 + 2000 : 30000));
+      if (esperar) ctx.espera[did] = { t: ahora() + espera, txt: tt, reserva };
       else delete ctx.espera[did];
       return { txt: tt, pendientes: true, reserva };
     };
@@ -3794,7 +3802,8 @@ setInterval(tictac, 250);
     const T_VUELTA = ahora();
     const H = Math.max(1, num(c.caballosHoras) || 2) * 3600;
     const ctx = { espera: ss.json('tb_lespera', {}), est: {}, ultFiestas: num(ss.get('tb_lfiestas')), fiestaAntes: ss.json('tb_lfiestaest', {}),
-                  pedidos: ss.json('tb_lpedidos', {}), cereal: {}, rojas: ss.json('tb_lrojas', {}), reservas: {} };
+                  pedidos: ss.json('tb_lpedidos', {}), cereal: {}, rojas: ss.json('tb_lrojas', {}), reservas: {},
+                  rapidas: new Set(Object.keys(P.porAldea).filter(d => P.porAldea[d].ordenes.some(o => o.tipo === 'rapido'))) };
     Object.keys(ctx.pedidos).forEach(k => { if (ahora() - ctx.pedidos[k].t > 4 * 3600000) delete ctx.pedidos[k]; });
     const sumar = (did, t) => { if (t) ctx.est[did] = (ctx.est[did] ? ctx.est[did] + ' · ' : '') + t; };
     try {
@@ -3840,7 +3849,7 @@ setInterval(tictac, 250);
           if (reserva) ctx.reservas[did] = reserva;
           const caballos = roja ? null : await tropasLista(did, ord, colas, H, 'caballos', false, reserva);
           sumar(did, caballos);
-          if (!conPrio) obra = await obrasLista(did, ord, ctx);
+          if (!conPrio) obra = ctx.rapidas.has(did) ? await obrasRapidas(did, ord, ctx) : await obrasLista(did, ord, ctx);
           if (obra) sumar(did, obra.txt);
           if (ord.some(o => o.tipo === 'hospital')) sumar(did, await curarHospital(did));
           if (!caballos && !roja) sumar(did, await tropasLista(did, ord, colas, H, 'resto', !(obra && obra.pendientes), reserva));
@@ -3880,6 +3889,49 @@ setInterval(tictac, 250);
        recargaba la pestaña EN MEDIO de la vuelta siguiente → "Failed to fetch" */
     const ms = await programarEn(T_INICIO + sortear(c.cada, [60, 90]));
     estado({ txt: 'vuelta lista (' + dids.length + ' aldeas)', next: ahora() + ms, ult: hhmm(ahora()) });
+    // "sin parar": mientras espera la próxima vuelta, mira esas aldeas apenas se les libera el obrero
+    const rapidas = dids.filter(d => ctx.rapidas.has(d));
+    if (rapidas.length) {
+      try { await vueltaRapida(P, ctx, rapidas, ahora() + ms - 15000, dids); }
+      catch (e) { if (!(e && (e.parar || e.otraCuenta))) log('sin parar: ' + (e && e.message ? e.message : e)); }
+    }
+  }
+
+  /* "sin parar" (pedido del 30/09): obras de la aldea hasta llenar la cola (cada
+     pedido que sale bien deja lugar a probar otro, hasta 3) */
+  async function obrasRapidas(did, ord, ctx) {
+    let r = await obrasLista(did, ord, ctx), txt = r ? r.txt : '';
+    for (let k = 0; k < 2 && r && /⬆|🏗/.test(r.txt) && !/sin botón|no lo veo/.test(r.txt); k++) {
+      await dormir(azar(400, 900));
+      const r2 = await obrasLista(did, ord, ctx);
+      if (!r2) break;
+      txt += ' · ' + r2.txt; r = Object.assign({}, r2, { txt });
+      if (!/⬆|🏗/.test(r2.txt)) break;
+    }
+    return r ? Object.assign({}, r, { txt }) : r;
+  }
+  /* entre vuelta y vuelta: cada aldea "sin parar" se vuelve a mirar cuando vence
+     su espera (el obrero se libera, o 30 s si le faltan recursos). Termina 15 s
+     antes de la próxima vuelta (la recarga cortaría los pedidos a la mitad). */
+  async function vueltaRapida(P, ctx, rapidas, hasta, dids) {
+    while (ahora() + 10000 < hasta) {
+      const prox = Math.min.apply(null, rapidas.map(d => (ctx.espera[d] ? ctx.espera[d].t : 0)));
+      const espera = Math.min(Math.max(5000, prox - ahora()), hasta - ahora() - 8000);
+      if (espera > 0) await dormir(espera);
+      if (ahora() + 8000 >= hasta) break;
+      const est = {};
+      for (const did of rapidas) {
+        if (ctx.espera[did] && ahora() < ctx.espera[did].t) continue;
+        bg({ tipo: 'trabajando', rol: ROL });
+        const r = await obrasRapidas(did, P.porAldea[did].ordenes, ctx);
+        if (r) est[did] = '⚡ ' + r.txt;
+        // recién pedida una obra: se vuelve a mirar en 10 s (ahí se lee cuándo se libera el obrero)
+        if (!r || !ctx.espera[did]) ctx.espera[did] = { t: ahora() + (r && /⬆|🏗/.test(r.txt) ? 10000 : 30000), txt: r ? r.txt : '' };
+      }
+      ss.set('tb_lespera', JSON.stringify(ctx.espera));
+      ss.set('tb_lpedidos', JSON.stringify(ctx.pedidos));
+      if (Object.keys(est).length) await bg({ tipo: 'listaEstado', est, dids });
+    }
   }
 
   /* ═══════════ 11 · bucle ═══════════ */

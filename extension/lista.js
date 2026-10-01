@@ -158,6 +158,8 @@ var TB_LISTA = (function () {
     if (f) return { tipo: 'fiestas', grande: !f[1] && !/\b(chicas?|pequenas?|small|little)\b/.test(f[3]), txt: texto.trim() };
     if (RX_HOSP.test(t)) return { tipo: 'hospital', txt: texto.trim() };
     if (/^nada$|^nothing$/.test(t)) return { tipo: 'nada', txt: texto.trim() };
+    // "sin parar" (pedido del 30/09: "que construya en las dos últimas aldeas sin parar")
+    if (/^(sin parar|nonstop|non stop|no parar|continuo|rapido|rapida|fast)$/.test(t)) return { tipo: 'rapido', txt: texto.trim() };
     if (RX_HEROE_NO.test(t)) return { tipo: 'heroe', si: false, txt: texto.trim() };
     if (RX_HEROE.test(t)) return { tipo: 'heroe', si: true, txt: texto.trim() };
     const ab = t.match(RX_ABASTECER);
@@ -278,7 +280,8 @@ var TB_LISTA = (function () {
     if (o.tipo === 'edificio') return (o.gid ? NOMBRE_ES[o.gid] : 'Muralla') + ' → ' + o.max;
     if (o.tipo === 'tropas') return 'tropas: ' + o.grupos.map(g => g.map(titulo).join(' / ')).join(' + ');
     if (o.tipo === 'hospital') return 'curar el hospital';
-    if (o.tipo === 'heroe') return o.si ? 'usa los recursos del héroe (también en obras)' : 'sin recursos del héroe';
+    if (o.tipo === 'rapido') return 'sin parar: llena la cola de obras y la vuelve a mirar apenas se libera';
+    if (o.tipo === 'heroe') return o.si ?'usa los recursos del héroe (también en obras)' : 'sin recursos del héroe';
     if (o.tipo === 'fiestas') return o.grande ? 'fiesta grande (si no se puede, chica)' : 'fiestas chicas';
     return o.tipo;
   }
