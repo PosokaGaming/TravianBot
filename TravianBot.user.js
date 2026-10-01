@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TravianBot
 // @namespace    https://github.com/PosokaGaming/TravianBot
-// @version      5.10.2
+// @version      5.10.3
 // @description  Bot para Travian Legends: TO DO LIST por aldea, farm list, tropas por prioridad de cola, héroe y construcción, con modos. Una sola pestaña.
 // @author       TravianBot
 // @match        *://*.travian.com/*
@@ -1463,11 +1463,15 @@ setInterval(tictac, 250);
     return programarEn((T_INICIO || ahora()) + s * 1000, sinRecarga);
   }
   async function programarEn(objetivo, sinRecarga) {
-    const ts = Math.max(ahora() + 3000, objetivo);
+    let ts = Math.max(ahora() + 3000, objetivo);
+    // sinRecarga: la vuelta la dispara el bucle; el refresh queda sólo de respaldo, 20 s después
+    const s = recargarEn((ts - ahora()) / 1000 + (sinRecarga ? 20 : 0));
+    /* la recarga tiene que llegar ANTES que la vuelta: si cae después (mínimo 4 s, o la pausa
+       por página), la vuelta arrancaba en la página vieja y la recarga la cortaba a los pocos
+       segundos ("TO DO · 5: Failed to fetch", 01/10 03:33) */
+    if (!sinRecarga) ts = Math.max(ts, ahora() + s * 1000 + 1500);
     NEXT = ts; RUN = true;
     await bg({ tipo: 'programar', rol: ROL, next: ts });
-    // sinRecarga: la vuelta la dispara el bucle; el refresh queda sólo de respaldo, 20 s después
-    recargarEn((ts - ahora()) / 1000 + (sinRecarga ? 20 : 0));
     return ts - ahora();
   }
   /* PAUSA POR PÁGINA (pedido del 30/09: "que cambie de página cada 10
@@ -1493,6 +1497,7 @@ setInterval(tictac, 250);
     // respaldo por si el meta refresh no salta; uno solo por página
     clearTimeout(respaldoRecarga);
     respaldoRecarga = setTimeout(async () => { if ((await bg({ tipo: 'quienSoy' })).run) location.reload(); }, (s + 5) * 1000);
+    return s;
   }
   let respaldoRecarga = 0;
   function cancelarRecarga() {

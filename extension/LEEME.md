@@ -181,6 +181,12 @@ mensaje entre pestaña y service worker puede tardar 5-40 s. Por eso cada paso
 guarda su avance ANTES de apretar un botón que recarga la página, y el service
 worker guarda todo en memoria (no lee el disco en cada consulta).
 
+## Cambios v5.10.3 (01/10/2026, 03:45) — la vuelta espera la recarga
+
+`programarEn` ponía la próxima vuelta a +3 s, pero el meta refresh nunca es antes de +4 s (y con la pausa por
+página, más): la vuelta arrancaba en la página vieja y la recarga la cortaba ("Failed to fetch" sueltos).
+`recargarEn` devuelve los segundos y la vuelta queda 1,5 s después de la recarga.
+
 ## Cambios v5.10.2 (01/10/2026, 03:35) — el rescate de cereal no paga obras
 
 03:25 rescate de la 7 (NPC al 15 %), 03:27 Hospital 13→14 se comió ese cereal, 03:28 otro rescate: el oro
