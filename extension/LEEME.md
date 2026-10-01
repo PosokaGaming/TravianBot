@@ -181,6 +181,12 @@ mensaje entre pestaña y service worker puede tardar 5-40 s. Por eso cada paso
 guarda su avance ANTES de apretar un botón que recarga la página, y el service
 worker guarda todo en memoria (no lee el disco en cada consulta).
 
+## Cambios v5.10.2 (01/10/2026, 03:35) — el rescate de cereal no paga obras
+
+03:25 rescate de la 7 (NPC al 15 %), 03:27 Hospital 13→14 se comió ese cereal, 03:28 otro rescate: el oro
+del rescate terminaba pagando obras. En una aldea con cereal negativo, una obra no puede dejar el cereal
+debajo del 10 % del granero (`RESCATE_PISO_OBRAS`; el rescate salta al 5 %): queda "🌾 obras en pausa".
+
 ## Cambios v5.10.1 (01/10/2026, 03:10) — la pestaña del TO DO vuelve a /profile
 
 De madrugada la pestaña quedó en /dorf1.php y el juego la recargaba cada ~5 s (recarga automática al terminar

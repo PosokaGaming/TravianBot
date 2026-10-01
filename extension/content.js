@@ -1914,6 +1914,17 @@
       const b = await traer(cand.campo ? urlSlot(did, cand.id) : urlEdificio(did, cand.aid, cand.gid));
       const boton = botonMejorar(b);
       destino = boton && !botonApagado(boton) && didDe(b) === did ? urlDelBoton(boton) : '';
+      /* aldea con cereal negativo (01/10, la 7 de la otra cuenta): el rescate le subía el cereal
+         al 15 % con NPC y una obra se lo comía en el minuto siguiente (03:25 rescate, 03:27
+         Hospital, 03:28 otro rescate = el oro del rescate pagaba obras). La obra no puede dejar
+         el cereal debajo del 10 % del granero. */
+      if (destino && ctx.rojas && ctx.rojas[did] != null) {
+        const stR = leerStock(b), cR = costoDe($('.upgradeBuilding', b) || $('#build', b) || b);
+        const piso = Math.floor(stR.capG * RESCATE_PISO_OBRAS / 100);
+        if (stR.capG && cR[3] && stR.cur[3] - cR[3] < piso) {
+          return cierre('🌾 obras en pausa: ' + cand.nombre + ' ' + cand.nivel + '→' + (cand.nivel + 1) + ' dejaría el cereal debajo del ' + RESCATE_PISO_OBRAS + ' % (cereal negativo)', true);
+        }
+      }
       if (!destino) return cierre('obras: ' + cand.nombre + ' nv' + cand.nivel + ' sin botón (' + (txt($('.errorMessage', b)) || 'no se puede ahora').slice(0, 60) + ')', true);
     }
     await dormir(azar(500, 1100));
@@ -2244,6 +2255,7 @@
      si a la aldea no le alcanza, el héroe pasa madera/barro/hierro). El NPC de
      rescate no cuenta para el tope del día. */
   const RESCATE_DISPARO = 5, RESCATE_OBJETIVO = 15, RESCATE_SEG = 600;
+  const RESCATE_PISO_OBRAS = 10;   // % del granero que las obras de una aldea roja no pueden tocar
   async function rescateCereal(ctx) {
     const d = await traer(location.origin + '/village/statistics/resources/warehouse');
     const t = $$('table', $('#content', d) || d).pop();

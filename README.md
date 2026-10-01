@@ -125,7 +125,7 @@ obrero está libre, faltaba **1 h o más** para tener los recursos, la obra cues
 negativo (en rojo en *Statistics → Resources → Warehouse*), cuando el granero
 baja al **5 %** (o le quedan 10 min o menos) lo sube al **15 %**. Primero con el
 cereal del héroe (que no se usa para nada más); si no alcanza, un NPC que pasa
-lo demás a cereal (sólo con el NPC tildado). Ese NPC no cuenta para el tope del día. Además, ningún NPC de
+lo demás a cereal (sólo con el NPC tildado). En esas aldeas, una obra no puede dejar el cereal debajo del 10 % del granero. Ese NPC no cuenta para el tope del día. Además, ningún NPC de
 tropas u obras baja el cereal de lo que había (hasta el 15 % del granero).
 
 La lista se escribe en la tarjeta **TO DO LIST** del panel (guardar o
