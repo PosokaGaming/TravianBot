@@ -2726,7 +2726,18 @@
            el juego recarga la página cada vez que termina una obra: con "sin parar"
            (campos que terminan cada pocos segundos) la recarga cortaba cada vuelta en
            el primer pedido ("Failed to fetch", 01/10 de madrugada). */
-        if (!enPerfil()) { estado({ txt: 'vuelvo a /profile' }); irA(location.origin + URL_PERFIL, true); return; }
+        if (!enPerfil()) {
+          /* si la pestaña está a la vista, la está usando el jugador (01/10 05:21: el usuario miraba
+             build.php/dorf2/reportes en esta pestaña y el bot lo devolvía a /profile cada vez):
+             no lo muevo y no trabajo; cuando la deja en segundo plano, vuelvo a /profile y sigo */
+          if (!document.hidden) {   // sin recarga: no le recargo la página que está mirando
+            cancelarRecarga();
+            NEXT = ahora() + 30000; RUN = true;
+            estado({ txt: '⏸ estás usando esta pestaña: sigo cuando la dejes en segundo plano', next: NEXT });
+            return;
+          }
+          estado({ txt: 'vuelvo a /profile' }); irA(location.origin + URL_PERFIL, true); return;
+        }
         await pasoLista(info);
       }
     } catch (e) {

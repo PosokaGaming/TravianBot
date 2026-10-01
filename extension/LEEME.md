@@ -181,6 +181,12 @@ mensaje entre pestaña y service worker puede tardar 5-40 s. Por eso cada paso
 guarda su avance ANTES de apretar un botón que recarga la página, y el service
 worker guarda todo en memoria (no lee el disco en cada consulta).
 
+## Cambios v5.10.5 (01/10/2026, 05:35) — no pelear con el jugador
+
+Desde la 5.10.1 la pestaña del TO DO volvía a /profile si no estaba ahí; a las 05:21 el usuario la estaba
+usando (build.php, dorf2, reportes) y el bot lo sacaba cada vez. Ahora, si la pestaña está a la vista
+(`!document.hidden`), no la mueve, no la recarga y no trabaja; sigue cuando queda en segundo plano.
+
 ## Cambios v5.10.4 (01/10/2026, 04:00) — primer envío real 10 → 2
 
 03:55 NPC en 10 con el granero al 100 % (madera/barro/hierro al tope de 800.000) y 03:56 envío a 2 de lo
