@@ -180,6 +180,12 @@ mensaje entre pestaña y service worker puede tardar 5-40 s. Por eso cada paso
 guarda su avance ANTES de apretar un botón que recarga la página, y el service
 worker guarda todo en memoria (no lee el disco en cada consulta).
 
+## Cambios v5.8.3 (30/09/2026, 22:55) — "que suban sí o sí 15 y 16"
+
+Con `hero` + `npc` en la misma línea: primero el héroe si tiene TODO lo que falta (sin oro); si no, el
+héroe completa el TOTAL (de lo que más tenga, sin desbordar) y después NPC al costo exacto. El freno del
+NPC exacto bajó a 1 cada 3 min por aldea (los campos bajos se terminan en segundos en x5).
+
 ## Cambios v5.8.2 (30/09/2026, 22:50) — sesión de cuidador (sitter)
 
 Como cuidador el juego no dibuja `input.villageInput` (no se puede renombrar la aldea): el TO DO daba

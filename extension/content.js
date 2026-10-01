@@ -1879,15 +1879,16 @@
       else delete ctx.espera[did];
       return { txt: tt, pendientes: true, reserva };
     };
-    // "npc" en la orden: cuando el TOTAL de la aldea alcanza, NPC al costo exacto y la sube
-    if (!cand && primera && primeraO && primeraO.npc) {
-      const r = await obraNPCExacta(did, primera, ctx);
-      if (r) return cierre(notas.concat([r.txt]).join(' · '), !r.hecho);
-    }
-    // "hero" en la línea de la aldea: lo que falta para la obra sale del héroe (antes que el NPC)
-    if (!cand && primera && TB_LISTA.heroeEn(PLISTA, did) === true) {
+    const conHeroe = TB_LISTA.heroeEn(PLISTA, did) === true;
+    // "hero" en la línea de la aldea: si el héroe tiene TODO lo que falta, lo pasa (sin gastar oro)
+    if (!cand && primera && conHeroe) {
       const r = await obraConHeroe(did, primera, ctx);
       if (r) return cierre(notas.concat([r]).join(' · '), false);
+    }
+    // "npc" en la orden: cuando el TOTAL (con el héroe, si la aldea lo usa) alcanza, NPC al costo exacto y la sube
+    if (!cand && primera && primeraO && primeraO.npc) {
+      const r = await obraNPCExacta(did, primera, ctx, conHeroe);
+      if (r) return cierre(notas.concat([r.txt]).join(' · '), !r.hecho);
     }
     if (!cand && primera && CFG.lista.npc !== false) {
       const r = await obraConNPC(did, primera, ctx);
@@ -1939,24 +1940,58 @@
      obrero libre y el TOTAL de la aldea alcanzando el costo, NPC al costo exacto
      (lo que sobra va adonde haya más lugar) y la sube. Es una orden explícita: no
      usa el tope diario del panel, pero para si no hay oro y hace como mucho un
-     NPC cada 10 min por aldea. → { txt, hecho } o null (no aplica) */
-  async function obraNPCExacta(did, c, ctx) {
+     NPC cada 3 min por aldea. → { txt, hecho } o null (no aplica) */
+  async function obraNPCExacta(did, c, ctx, conHeroe) {
     const url = c.campo ? urlSlot(did, c.id) : urlEdificio(did, c.aid, c.gid);
     await dormir(azar(300, 700));
-    const b = await traer(url);
+    let b = await traer(url);
     if (didDe(b) !== did) return null;
-    const up = $('.upgradeBuilding', b) || $('#build', b) || b;
+    let up = $('.upgradeBuilding', b) || $('#build', b) || b;
     if (!RX_FALTA_REC.test(txt($('.errorMessage', up)))) return null;   // obrero ocupado u otra cosa
     const costo = costoDe(up);
-    const st = leerStock(b);
+    let st = leerStock(b);
     if (!suma(costo) || !st.capW || !st.capG) return null;
     const cap = i => i === 3 ? st.capG : st.capW;
     const que = c.nombre + ' ' + c.nivel + '→' + (c.nivel + 1);
     if (costo.some((x, i) => x > cap(i))) return { txt: que + ': hace falta más depósito (' + fmtRec(costo) + ')', hecho: false };
-    const total = suma(st.cur) - 60;
-    if (total < suma(costo)) return { txt: que + ': para el NPC faltan ' + miles(suma(costo) - total) + ' en total', hecho: false };
+    let total = suma(st.cur) - 60;
+    let delHeroe = '';
+    /* con "hero" (pedido del 30/09: "que suban sí o sí 15 y 16"): si al TOTAL le
+       falta, el héroe pone lo que le falta (de lo que más tenga, sin desbordar)
+       y después va el NPC exacto */
+    if (total < suma(costo) && conHeroe && ahora() - num(ss.get('tb_lheroe_ko')) >= 900000) {
+      let inv = null;
+      try { inv = await inventarioHeroe(); } catch (e) {}
+      if (inv) {
+        const lugar = [0, 1, 2, 3].map(i => Math.max(0, Math.min(inv[i + 1] ? inv[i + 1].n : 0, cap(i) - st.cur[i])));
+        let falta = suma(costo) - total + 100;
+        const pasar = [0, 0, 0, 0];
+        [0, 1, 2, 3].sort((p, q) => lugar[q] - lugar[p]).forEach(i => {
+          if (falta <= 0 || lugar[i] < 100) return;
+          const n = Math.min(lugar[i], Math.max(100, falta));
+          pasar[i] = n; falta -= n;
+        });
+        if (falta <= 0) {
+          const dado = await heroeARecursos(did, pasar, inv);
+          if (!suma(dado)) ss.set('tb_lheroe_ko', String(ahora()));
+          else {
+            delHeroe = dado.map((v, i) => v ? miles(v) + ' ' + RECURSO[i + 1] : '').filter(Boolean).join(', ');
+            log('héroe → ' + nombreDe(did) + ': ' + delHeroe + ' para ' + que + ' (y NPC si hace falta)');
+            await dormir(azar(400, 900));
+            b = await traer(url);
+            up = $('.upgradeBuilding', b) || $('#build', b) || b;
+            st = leerStock(b);
+            total = suma(st.cur) - 60;
+            // con lo del héroe puede que ya alcance tal cual: la pido sin NPC
+            const boton = botonMejorar(b);
+            if (boton && !botonApagado(boton)) return pedirObra(did, c, ctx, url, 'con el héroe (' + delHeroe + ')');
+          }
+        }
+      }
+    }
+    if (total < suma(costo)) return { txt: que + ': para el NPC faltan ' + miles(suma(costo) - total) + ' en total' + (conHeroe ? ' (el héroe no alcanza)' : ''), hecho: false };
     const clave = 'tb_lnpcx_' + did;
-    if (ahora() - num(ss.get(clave)) < 600000) return null;
+    if (ahora() - num(ss.get(clave)) < 180000) return null;
     if (!(await npcPermitido(true))) return { txt: que + ': sin oro para el NPC', hecho: false };
     const d = costo.slice();
     let resto = total - suma(d);
